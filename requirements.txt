@@ -1,0 +1,8 @@
+colorama
+peewee
+telethon
+requests
+PyYAML
+tiktoken
+openai
+sqlalchemy

@@ -1,0 +1,25 @@
+# Использовать ли прокси(если True/да, то следует в файл proxy.txt записать построчно прокси в формате ip:port:user:password)
+# Можно использовать прокси типы как socks5, socks4 или http (параметр type_proxy)
+use_proxy: False
+type_proxy: socks5
+
+
+# True - установить случайное, False - удалить
+set_new_username: True
+
+# "gpt-3.5-turbo-16k", "gpt-4", "gpt-4o", "gpt-4-1106-preview"
+gpt_model: "gpt-3.5-turbo"
+use_gpt: False
+
+# Не реализовано, т.к. нет смысла без чатГПТ
+need_edit_comment: False
+delay_before_edit: 6000
+
+# задержка между подписками
+delay_between_subscriptions: [5, 8]
+
+# задержка от появления поста до написания комментария
+delay_before_comment: [10, 11]
+
+# задержка после обработки комментария
+delay_between_comments: [10, 10]

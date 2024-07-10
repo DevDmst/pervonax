@@ -1,0 +1,13 @@
+/settings/database/
+/settings/settings.yaml
+/settings/proxy.txt
+/db.db
+/sessions/
+.idea
+/mailing.txt
+/channels.txt
+/start.bat
+/config_and_settings/config.yaml
+/database/
+/logs/
+/data/

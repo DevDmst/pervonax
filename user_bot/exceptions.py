@@ -1,0 +1,2 @@
+class LinkBioBan(Exception):
+    pass

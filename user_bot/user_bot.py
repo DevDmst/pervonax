@@ -75,6 +75,7 @@ class UserBot:
         self._delay_between_comments = delay_between_comments
         self._admin_id = admin_id
         self._account_name = account_name
+
         self._client = TelegramClient(
             session=session_path,
             proxy=proxy,
@@ -351,6 +352,8 @@ class UserBot:
             app_version = json_params.pop('app_version')
             lang_code = json_params.pop('lang_pack')
             system_lang_code = json_params.pop('system_lang_pack')
+
+            json_params.clear()
 
             json_params['api_id'] = api_id
             json_params['api_hash'] = api_hash

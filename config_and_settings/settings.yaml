@@ -1,6 +1,6 @@
 # Использовать ли прокси(если True/да, то следует в файл proxy.txt записать построчно прокси в формате ip:port:user:password)
 # Можно использовать прокси типы как socks5, socks4 или http (параметр type_proxy)
-use_proxy: False
+use_proxy: True
 type_proxy: socks5
 
 
@@ -22,6 +22,6 @@ delay_between_subscriptions: [5, 8]
 delay_before_comment: [10, 11]
 
 # задержка после обработки комментария
-delay_between_comments: [10, 10]
+delay_between_comments: [1, 2]
 
 max_chat_on_acc: 900

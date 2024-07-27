@@ -213,13 +213,14 @@ async def edit_all(user_bots: list[UserBot]):
                                                PATH_TO_LAST_NAME_FILE,
                                                PATH_TO_ABOUT_FILE)
 
-        async def change_profile(profile_info_param):
-            await user_bot.edit_profile(*profile_info_param)
+        async def change_profile(user_bot_, profile_info_param):
+            await user_bot_.edit_profile(*profile_info_param)
             await TelegramAccountsRepo.set_edited(user_bot.db_acc_id)
 
         tasks.append(
-            asyncio.ensure_future(change_profile(profile_info))
+            asyncio.ensure_future(change_profile(user_bot, profile_info))
         )
+
     await asyncio.gather(*tasks)
     logging.info("Аккаунты отредактированы\n")
 

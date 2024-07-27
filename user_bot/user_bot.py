@@ -9,7 +9,7 @@ import traceback
 from asyncio import Task
 from datetime import datetime, timedelta
 
-from telethon import TelegramClient, events
+from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
     UsernameOccupiedError, UsernameNotModifiedError, FloodWaitError, InviteRequestSentError, \
     UserAlreadyParticipantError, ChannelPrivateError, PeerFloodError, UserBannedInChannelError, ChatWriteForbiddenError, \
@@ -18,7 +18,7 @@ from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRe
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
-from telethon.tl.types import InputPhoto, ChatInviteAlready, Chat, Channel
+from telethon.tl.types import InputPhoto, ChatInviteAlready, Chat, Channel, PeerStories
 
 import utils
 from config_and_settings import settings
@@ -121,6 +121,8 @@ class UserBot:
         await asyncio.sleep(1)
 
         await self._set_username(settings.set_new_username)
+
+        await self._delete_stories()
 
     async def disconnect(self):
         await self._client.disconnect()
@@ -428,14 +430,15 @@ class UserBot:
         async for dialog in self._client.iter_dialogs():
             while True:
                 try:
-                    if not dialog.is_user:
-                        i += 1
-                        await self._client.delete_dialog(dialog)
-                        logging.info(f"{self._account_name} - Удалил чат №{i}")
+                    i += 1
+                    await self._client.delete_dialog(dialog, revoke=True)
+                    logging.info(f"{self._account_name} - Удалил чат №{i}")
                     break
                 except FloodWaitError as e:
                     logging.info(f"{self._account_name} - FloodWaitError - {e.seconds + 30}")
                     await asyncio.sleep(e.seconds + 30)
+                except ChannelPrivateError as e:
+                    logging.error(e)
                 except Exception as e:
                     msg = f"{self._account_name} - Неожиданное исключение - {type(e)} - {e}"
                     logging.error(msg)
@@ -443,3 +446,12 @@ class UserBot:
                     await self._notifier.notify(self._admin_id, msg)
 
         logging.info(f"{self._account_name} - Отписался от (каналов или групп): {i}")
+
+    @log_decorator
+    async def _delete_stories(self):
+        me = await self._client.get_me()
+        result = await self._client(functions.stories.GetPeerStoriesRequest(me))
+        stories = result.stories.stories
+        stories_ids = list([story.id for story in stories])
+        if stories_ids:
+            await self._client(functions.stories.DeleteStoriesRequest(me, stories_ids))

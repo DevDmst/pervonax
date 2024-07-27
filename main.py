@@ -55,112 +55,6 @@ async def unsubscribe_all(user_bots: list[UserBot]):
     logging.info("Отписка завершена")
 
 
-#
-# async def main():
-#     logging.info("Скрипт запущен")
-#     await create_tables()
-#
-#     counter = [0]
-#     tg_sessions = utils.get_sessions(PATH_TO_SESSIONS_FOLDER)
-#     proxies = utils.get_proxies(PATH_TO_PROXY_FILE, settings.type_proxy)
-#     channels = utils.get_channels(PATH_TO_CHANNELS_FILE)
-#     active_user_bots = []
-#     tasks = []
-#
-#     message_generator = MessageGenerator(DATA_MAILING_TXT)
-#     notifier = Notifier(config.bot_token)
-#
-#     async with Session() as db_session:
-#         for name, tg_session in tg_sessions.items():
-#             acc = await TelegramAccountsRepo.get_by_name(name, db_session)
-#             if not acc:
-#                 acc = await TelegramAccountsRepo.add_one({"session_name": name}, db_session)
-#
-#             proxy = None
-#             if settings.use_proxy:
-#                 proxy = await acc.awaitable_attrs.proxy
-#                 if not proxy:  # or not utils.is_dict_exist(proxy, proxies)
-#                     proxy = utils.get_next(proxies, counter)
-#                     proxy["account_id"] = acc.id
-#                     proxy = await ProxiesRepo.add_one(proxy, db_session)
-#
-#             user_bot = UserBot(
-#                 acc.id,
-#                 account_name=acc.session_name,
-#                 delay_between_subscriptions=settings.delay_between_subscriptions,
-#                 delay_between_comments=settings.delay_between_comments,
-#                 delay_before_comment=settings.delay_before_comment,
-#                 admin_id=config.admin_id,
-#                 message_generator=message_generator,
-#                 notifier=notifier,
-#                 session_path=tg_session["session"],
-#                 json_path=tg_session["json"],
-#                 api_id=config.api_id,
-#                 api_hash=config.api_hash,
-#                 proxy=proxy,
-#             )
-#             me = await user_bot.start()
-#             if me:
-#                 active_user_bots.append(user_bot)
-#                 acc.active = True
-#                 acc.tg_id = me.id
-#                 await db_session.commit()
-#
-#                 user_bot.tg_id = me.id
-#
-#                 if not acc.edited:
-#                     profile_info = get_random_profile_info(PATH_TO_PHOTOS,
-#                                                            PATH_TO_FIRST_NAME_FILE,
-#                                                            PATH_TO_LAST_NAME_FILE,
-#                                                            PATH_TO_ABOUT_FILE)
-#
-#                     async def change_profile(profile_info_param):
-#                         await user_bot.edit_profile(*profile_info_param)
-#                         await TelegramAccountsRepo.set_edited(acc.id)
-#
-#                     tasks.append(
-#                         asyncio.ensure_future(change_profile(profile_info))
-#                     )
-#             else:
-#                 logging.info(f"Не удалось запустить сессию {name}")
-#                 acc.active = False
-#                 await db_session.commit()
-#
-#         await asyncio.gather(*tasks)
-#
-#         number_of_user_bots = len(active_user_bots)
-#         for i, channel in enumerate(channels):
-#             user_bot_index = i % number_of_user_bots
-#             user_bot = active_user_bots[user_bot_index]
-#
-#             async def save_subscription(chat: str, data: tuple):
-#                 if data:
-#                     number_of_subscribes = await AccountsChatsRepo.get_quantity_by_account(user_bot.db_acc_id)
-#                     if number_of_subscribes >= settings.max_chat_on_acc:
-#                         ...
-#                     async with Session() as _db_session:
-#                         data = {
-#                             "chat_type": data[0],
-#                             "id": data[2],
-#                             "date_added": datetime.utcnow(),
-#                             "title": data[1],
-#                             "invite_link": chat,
-#                             "subscribed": True,
-#                             "subscriber_id": user_bot.db_acc_id,
-#                         }
-#                         try:
-#                             await ChatsRepo.add_one(data, _db_session)
-#                             await AccountsChatsRepo.add_one({"chat_id": data[2], "account_id": acc.id}, _db_session)
-#                         except Exception as e:
-#                             logging.exception(e)
-#
-#             if not user_bot.subscribe_observers:
-#                 user_bot.subscribe_observers.append(save_subscription)
-#
-#             if not await ChatsRepo.is_subscribed(channel, db_session):
-#                 await user_bot.subscribe_queue.put(channel)
-
-
 async def subscribe_all(channels: list[str], active_user_bots: list[UserBot]):
     channels_per_acc = len(channels) / len(active_user_bots)
     secs_per_channel = random.choice(settings.delay_between_subscriptions)
@@ -171,6 +65,11 @@ async def subscribe_all(channels: list[str], active_user_bots: list[UserBot]):
 
     iterator = utils.cyclic_iterator(active_user_bots)
     number_of_user_bots = len(active_user_bots)
+
+    if math.ceil(len(channels) / len(active_user_bots)) > settings.max_chat_on_acc:
+        raise ValueError(f"Слишком много каналов для подписки,"
+                         f" максимальное количество каналов на 1 аккаунт - {settings.max_chat_on_acc}")
+
     async with Session() as db_session:
         for i, channel in enumerate(channels):
             counter = 0
@@ -292,21 +191,23 @@ async def main():
     while True:
         await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
         point = input("\nВыберите пункт:"
-                      "\n1. Подписка на каналы из channels.txt"
+                      "\n1. Отредактировать все профили"
                       "\n2. Отписаться от всего"
-                      "\n3. Отредактировать все профили"
+                      "\n3. Отписаться от всего и подписаться на каналы из channels.txt"
                       "\n4. Первонах\n")
         if point == "1":
+            await edit_all(active_user_bots)
+            logging.info("Аккаунты завершили редактирование")
+        elif point == "2":
+            await unsubscribe_all(active_user_bots)
+            await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
+        elif point == "3":
+            await unsubscribe_all(active_user_bots)
             try:
                 await subscribe_all(channels, active_user_bots)
             except Exception as e:
                 logging.exception(e)
             await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
-        elif point == "2":
-            await unsubscribe_all(active_user_bots)
-            await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
-        elif point == "3":
-            await edit_all(active_user_bots)
         elif point == "4":
             run_pervonax(active_user_bots)
             break

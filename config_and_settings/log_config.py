@@ -42,6 +42,8 @@ formatter = ColorFormatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s
 stream_handler.setLevel(log_lvl)
 stream_handler.setFormatter(formatter)
 
+logging.getLogger('telethon.client.updates').setLevel(logging.ERROR)
+
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     level=logging.DEBUG,

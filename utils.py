@@ -88,3 +88,11 @@ def get_channels(path: str):
         channels = f.readlines()
         channels = [channel.strip() for channel in channels if is_tg_link(channel)]
         return channels
+
+def cyclic_iterator(items):
+    if not items:
+        raise ValueError("The list is empty")
+    index = 0
+    while True:
+        yield items[index]
+        index = (index + 1) % len(items)

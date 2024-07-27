@@ -33,13 +33,13 @@ def log_decorator(func):
     async def wrapper(self, *args, **kwargs):
         logger = logging.getLogger(func.__qualname__)
 
-        logger.info(f"Account: {self.db_acc_id}")
+        logger.info(f"Account: {self._account_name}")
         try:
             result = await func(self, *args, **kwargs)
-            logger.info(f"Account: {self.db_acc_id} | Успешно")
+            logger.info(f"Account: {self._account_name} | Успешно")
             return result
         except Exception as e:
-            logger.error(f"Account: {self.db_acc_id} "
+            logger.error(f"Account: {self._account_name} "
                          f"| Метод {func.__name__} завершился с ошибкой: {e}")
             raise
 
@@ -60,7 +60,7 @@ class UserBot:
                  json_path: str | None,
                  api_id: str = None,
                  api_hash: str = None,
-                 proxy: str | None = None,
+                 proxy: dict | None = None,
                  ):
         self._tg_id = None
         self.db_acc_id = account_id
@@ -80,9 +80,6 @@ class UserBot:
             proxy=proxy,
             **self._get_session_params
         )
-
-        event = events.NewMessage(incoming=True, func=lambda e: e.is_channel)
-        self._client.add_event_handler(self._handle_new_msg, event)
 
         self._semaphore = asyncio.Semaphore(1)
         self._last_subscribe_datetime = datetime.utcnow().replace(year=2000)
@@ -106,12 +103,10 @@ class UserBot:
             return me_
         except Exception as e:
             return False
-        # except (AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound):
-        #     return False
-        # except ConnectionError:
-        #     raise
-        # except Exception as e:
-        #     return False
+
+    def run_writing_comments(self):
+        event = events.NewMessage(incoming=True, func=lambda e: e.is_channel)
+        self._client.add_event_handler(self._handle_new_msg, event)
 
     @log_decorator
     async def edit_profile(self, photo: str, first_name: str, last_name: str, about: str):
@@ -131,7 +126,7 @@ class UserBot:
 
     async def _notify_sub_observers(self, chat: str, data):
         for observer_func in self.subscribe_observers:
-            await observer_func(chat, data)
+            await observer_func(self.db_acc_id, chat, data)
 
     async def _handle_new_msg(self, event):
         if event.message and event.message.replies is not None:
@@ -409,12 +404,39 @@ class UserBot:
             data = await self._subscribe(chat)
             self._last_subscribe_datetime = datetime.utcnow()
 
-            await self._notify_sub_observers(chat, data)
+            # await self._notify_sub_observers(chat, data)
 
     async def _process_comment_queue(self):
         while True:
             event = await self._comment_queue.get()
 
-            await self._write_comment(event)
+            try:
+                await self._write_comment(event)
+            except Exception as e:
+                msg = f"{self._account_name} - {type(e)} - {str(e)}"
+                logging.error(msg)
+                logging.exception(e)
+                await self._notifier.notify(self._admin_id, msg)
 
             await asyncio.sleep(random.randint(*self._delay_between_comments))
+
+    async def unsubscribe_all(self):
+        i = 0
+        async for dialog in self._client.iter_dialogs():
+            while True:
+                try:
+                    if not dialog.is_user:
+                        i += 1
+                        await self._client.delete_dialog(dialog)
+                        logging.info(f"{self._account_name} - Удалил чат №{i}")
+                    break
+                except FloodWaitError as e:
+                    logging.info(f"{self._account_name} - FloodWaitError - {e.seconds + 30}")
+                    await asyncio.sleep(e.seconds + 30)
+                except Exception as e:
+                    msg = f"{self._account_name} - Неожиданное исключение - {type(e)} - {e}"
+                    logging.error(msg)
+                    logging.exception(e)
+                    await self._notifier.notify(self._admin_id, msg)
+
+        logging.info(f"{self._account_name} - Отписался от (каналов или групп): {i}")

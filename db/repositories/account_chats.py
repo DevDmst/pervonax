@@ -31,3 +31,17 @@ class AccountsChatsRepo(SQLAlchemyRepository):
                 await session.execute(stmt)
 
             await session.commit()
+
+    @classmethod
+    async def get_quantity_by_account(cls, db_acc_id: int):
+        pass #TODO
+
+    @classmethod
+    async def is_subscribed(cls, db_acc_id: int, channel: str, session: AsyncSession):
+        stmt = (
+            select(cls.model)
+            .where(cls.model.account_id == db_acc_id, cls.model.chat_link == channel)
+        )
+        result = await session.scalars(stmt)
+        return result.all()
+

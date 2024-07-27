@@ -10,7 +10,7 @@ from .. import Base
 class AccountsChats(Base):
     __tablename__ = "accounts_chats"
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey('accounts.id'), primary_key=True)
-    chat_id: Mapped[int] = mapped_column(Integer, ForeignKey('chats.id'), primary_key=True)
+    chat_link: Mapped[str] = mapped_column(primary_key=True)
 
     banned: Mapped[bool] = mapped_column(default=False)
     banned_date: Mapped[Optional[datetime]]

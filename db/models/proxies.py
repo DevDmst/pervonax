@@ -20,3 +20,13 @@ class Proxy(Base):
     rdns: Mapped[bool]
 
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
+
+    def to_dict(self):
+        return {
+            'proxy_type': self.proxy_type,
+            'addr': self.addr,
+            'port': self.port,
+            'username': self.username,
+            'password': self.password,
+            'rdns': self.rdns
+        }

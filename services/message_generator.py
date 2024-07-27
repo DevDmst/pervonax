@@ -25,7 +25,7 @@ class MessageGenerator:
         return "".join(phrase)
 
 
-    def generate_ai_response(self):
+    async def generate_ai_response(self, text):
         ...
 
 

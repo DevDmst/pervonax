@@ -23,3 +23,5 @@ delay_before_comment: [10, 11]
 
 # задержка после обработки комментария
 delay_between_comments: [10, 10]
+
+max_chat_on_acc: 900

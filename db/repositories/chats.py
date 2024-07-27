@@ -13,10 +13,9 @@ class ChatsRepo(SQLAlchemyRepository):
     model = Chat
 
     @classmethod
-    async def is_subscribed(cls, chat: str, acc_id: int, session: AsyncSession) -> bool:
-        stmt = select(cls.model.id).where(cls.model.invite_link == chat,
-                                          cls.model.subscriber_id == acc_id)
+    async def is_subscribed(cls, chat: str, session: AsyncSession) -> bool:
+        stmt = (select(cls.model.id)
+                .where(cls.model.invite_link == chat,
+                       cls.model.subscribed.is_(True)))
         stmt_ = await session.scalar(stmt)
         return stmt_
-
-

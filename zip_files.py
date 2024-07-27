@@ -12,7 +12,7 @@ def get_git_tracked_files():
     return files
 
 
-def create_zip_archive(files, archive_name='archive.zip'):
+def create_zip_archive(files, archive_name='pervonax.zip'):
     """Создать zip-архив с указанными файлами."""
     with zipfile.ZipFile(archive_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for file in files:

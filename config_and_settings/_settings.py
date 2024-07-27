@@ -13,3 +13,4 @@ class Settings:
     delay_between_subscriptions: list[int]
     delay_before_comment: list[int]
     delay_between_comments: list[int]
+    max_chat_on_acc: int

@@ -114,7 +114,7 @@ async def edit_all(user_bots: list[UserBot]):
 
         async def change_profile(user_bot_, profile_info_param):
             await user_bot_.edit_profile(*profile_info_param)
-            await TelegramAccountsRepo.set_edited(user_bot.db_acc_id)
+            await TelegramAccountsRepo.set_edited(user_bot_.db_acc_id)
 
         tasks.append(
             asyncio.ensure_future(change_profile(user_bot, profile_info))

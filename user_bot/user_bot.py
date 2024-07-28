@@ -13,7 +13,7 @@ from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
     UsernameOccupiedError, UsernameNotModifiedError, FloodWaitError, InviteRequestSentError, \
     UserAlreadyParticipantError, ChannelPrivateError, PeerFloodError, UserBannedInChannelError, ChatWriteForbiddenError, \
-    ForbiddenError, ChatAdminRequiredError
+    ForbiddenError, ChatAdminRequiredError, InviteHashExpiredError
 from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
@@ -320,6 +320,10 @@ class UserBot:
             await asyncio.sleep(seconds_)
             response = await self._send_subscribe_request(chat_link)
             return response
+
+        except InviteHashExpiredError as e:
+            logging.error(f"{self._account_name} - InviteHashExpiredError - {chat_link}")
+            return None
 
         except ValueError as e:
             if str(e).startswith("No user has"):

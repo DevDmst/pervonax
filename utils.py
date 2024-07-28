@@ -54,12 +54,14 @@ def get_path_from_root(path: str) -> str:
 
 
 def get_next(items: list, counter: list):
-    if len(items) > counter[0] + 1:
+    """Возвращает n-ый элемент, где n = counter[0] и увеличивает counter[0] на 1"""
+    if counter[0] < len(items):
+        item = items[counter[0]]
         counter[0] += 1
-        return items[counter[0]]
+        return item
     else:
         counter[0] = 0
-        return items[-1]
+        return items[0]
 
 
 def is_dict_exist(dict_item: dict, list_of_dicts: list[dict]):

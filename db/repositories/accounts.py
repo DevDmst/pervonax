@@ -24,3 +24,4 @@ class TelegramAccountsRepo(SQLAlchemyRepository):
             stmt = update(cls.model).where(cls.model.id == acc_id).values(edited=True)
             await session.execute(stmt)
             await session.commit()
+

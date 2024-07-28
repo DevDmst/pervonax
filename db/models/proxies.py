@@ -19,7 +19,6 @@ class Proxy(Base):
     password: Mapped[str]
     rdns: Mapped[bool]
 
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
 
     def to_dict(self):
         return {

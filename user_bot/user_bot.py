@@ -18,7 +18,10 @@ from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRe
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
-from telethon.tl.types import InputPhoto, ChatInviteAlready, Chat, Channel, PeerStories
+from telethon.tl.types import InputPhoto, ChatInviteAlready, Chat, Channel, PeerStories, InputPrivacyKeyStatusTimestamp, \
+    InputPrivacyValueAllowContacts, InputPrivacyKeyProfilePhoto, InputPrivacyKeyAbout, InputPrivacyKeyPhoneNumber, \
+    InputPrivacyKeyChatInvite, InputPrivacyKeyForwards, InputPrivacyKeyPhoneCall, InputPrivacyKeyPhoneP2P, \
+    InputPrivacyKeyVoiceMessages, InputPrivacyKeyBirthday, InputPrivacyValueDisallowAll, InputPrivacyValueAllowAll
 
 import utils
 from config_and_settings import settings
@@ -40,7 +43,7 @@ def log_decorator(func):
             return result
         except Exception as e:
             logger.error(f"Account: {self._account_name} "
-                         f"| Метод {func.__name__} завершился с ошибкой: {e}")
+                         f"| Метод {func.__name__} завершился с ошибкой: {e}, тип ошибки {type(e)}")
             raise
 
     return wrapper
@@ -111,18 +114,39 @@ class UserBot:
 
     @log_decorator
     async def edit_profile(self, photo: str, first_name: str, last_name: str, about: str):
-        await self._delete_profile_photos()
-        await asyncio.sleep(1)
-
-        await self._upload_new_profile_photo(photo)
-        await asyncio.sleep(1)
-
+        if not settings.update_fio:
+            first_name = None
+            last_name = None
+        if not settings.update_bio:
+            about = None
         await self._edit_name_and_about(first_name, last_name, about)
         await asyncio.sleep(1)
 
-        await self._set_username(settings.set_new_username)
+        if settings.delete_avatar_before_set_new:
+            await self._delete_profile_photos()
+            await asyncio.sleep(1)
 
-        await self._delete_stories()
+        if settings.update_avatar:
+            await self._upload_new_profile_photo(photo)
+            await asyncio.sleep(1)
+
+        if settings.set_random_username:
+            await self._set_username(True)
+            await asyncio.sleep(1)
+        elif settings.delete_username:
+            await self._set_username(False)
+            await asyncio.sleep(1)
+
+        if settings.delete_stories:
+            await self._delete_stories()
+            await asyncio.sleep(1)
+
+        if settings.close_other_sessions:
+            await self._close_other_sessions()
+            await asyncio.sleep(1)
+
+        if settings.edit_privacy:
+            await self._set_privacy()
 
     async def disconnect(self):
         await self._client.disconnect()
@@ -157,11 +181,12 @@ class UserBot:
 
     @log_decorator
     async def _edit_name_and_about(self, first_name: str, last_name: str, about: str):
-        await self._client(UpdateProfileRequest(
-            first_name=first_name,
-            last_name=last_name,
-            about=about
-        ))
+        if first_name or last_name or about:
+            await self._client(UpdateProfileRequest(
+                first_name=first_name,
+                last_name=last_name,
+                about=about
+            ))
 
     @log_decorator
     async def _set_username(self, set_new_username=False):
@@ -406,7 +431,11 @@ class UserBot:
                 logging.info(f"{self._account_name} - пауза в подписке {seconds} сек.")
                 await asyncio.sleep(seconds)
 
-            data = await self._subscribe(chat)
+            try:
+                data = await self._subscribe(chat)
+            except Exception as e:
+                logging.exception(e)
+
             self._last_subscribe_datetime = datetime.utcnow()
 
             # await self._notify_sub_observers(chat, data)
@@ -430,22 +459,23 @@ class UserBot:
         async for dialog in self._client.iter_dialogs():
             while True:
                 try:
-                    i += 1
                     await self._client.delete_dialog(dialog, revoke=True)
+                    i += 1
                     logging.info(f"{self._account_name} - Удалил чат №{i}")
                     break
                 except FloodWaitError as e:
                     logging.info(f"{self._account_name} - FloodWaitError - {e.seconds + 30}")
                     await asyncio.sleep(e.seconds + 30)
                 except ChannelPrivateError as e:
-                    pass
+                    break
                 except ChatAdminRequiredError as e:
-                    pass
+                    break
                 except Exception as e:
                     msg = f"{self._account_name} - Неожиданное исключение - {type(e)} - {e}"
                     logging.error(msg)
                     logging.exception(e)
                     await self._notifier.notify(self._admin_id, msg)
+                    break
 
         logging.info(f"{self._account_name} - Отписался от (каналов или групп): {i}")
 
@@ -457,3 +487,58 @@ class UserBot:
         stories_ids = list([story.id for story in stories])
         if stories_ids:
             await self._client(functions.stories.DeleteStoriesRequest(me, stories_ids))
+
+    async def _close_other_sessions(self):
+        # Получение списка всех активных сессий
+        authorized_sessions = await self._client(functions.account.GetAuthorizationsRequest())
+        current_session_hash = 0
+
+        for session in authorized_sessions.authorizations:
+            if session.hash != current_session_hash:
+                # Закрытие других сессий
+                try:
+                    await asyncio.sleep(1)
+                    await self._client(functions.account.ResetAuthorizationRequest(session.hash))
+                except Exception as e:
+                    logging.error(f"{self._account_name} - {type(e)} - {e}")
+
+    async def _set_privacy(self):
+        fields = [
+            {
+                "key": InputPrivacyKeyStatusTimestamp(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_online else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyProfilePhoto(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_avatar else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyBirthday(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_birthday else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyAbout(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_bio else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyPhoneNumber(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_phone else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyChatInvite(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_groups else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyForwards(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_replay_msgs else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyPhoneCall(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_calls else [InputPrivacyValueDisallowAll()]
+            }, {
+                "key": InputPrivacyKeyVoiceMessages(),
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_voice_msgs else [InputPrivacyValueDisallowAll()]
+            },
+        ]
+        for field in fields:
+            try:
+                result = await self._client(functions.account.SetPrivacyRequest(
+                    key=field["key"],
+                    rules=field["rules"]
+                ))
+                await asyncio.sleep(1)
+            except Exception as e:
+                logging.error(f"{self._account_name} - {type(e)} - {e}")

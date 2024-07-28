@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, DateTime
+from sqlalchemy import BigInteger, DateTime, ForeignKey
 from sqlalchemy.orm import mapped_column, Mapped, relationship
 
 from .. import Base
@@ -18,5 +18,5 @@ class TelegramAccount(Base):
 
     active: Mapped[bool] = mapped_column(default=False)
 
-    proxy: Mapped["Proxy"] = relationship("Proxy")
-
+    proxy_id: Mapped[Optional[int]] = mapped_column(ForeignKey('proxies.id'))
+    proxy: Mapped[Optional["Proxy"]] = relationship("Proxy")

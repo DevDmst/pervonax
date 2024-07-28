@@ -146,6 +146,13 @@ async def main():
     notifier = Notifier(config.bot_token)
 
     async with Session() as db_session:
+        # добавляем прокси в бд
+        for proxy in proxies:
+            if not await ProxiesRepo.exist(proxy, db_session):
+                await ProxiesRepo.add_one(proxy, db_session)
+
+        proxies_db = await ProxiesRepo.get_all(db_session)
+
         for name, tg_session in tg_sessions.items():
             acc = await TelegramAccountsRepo.get_by_name(name, db_session)
             if not acc:
@@ -154,10 +161,10 @@ async def main():
             proxy = None
             if settings.use_proxy:
                 proxy = await acc.awaitable_attrs.proxy
-                if not proxy:  # or not utils.is_dict_exist(proxy, proxies)
-                    proxy = utils.get_next(proxies, counter)
-                    proxy["account_id"] = acc.id
-                    proxy = await ProxiesRepo.add_one(proxy, db_session)
+                if not proxy:
+                    proxy = utils.get_next(proxies_db, counter)
+                    acc.proxy_id = proxy.id
+                    await db_session.commit()
                 proxy = proxy.to_dict()
 
             user_bot = UserBot(
@@ -193,22 +200,33 @@ async def main():
         point = input("\nВыберите пункт:"
                       "\n1. Отредактировать все профили"
                       "\n2. Отписаться от всего"
-                      "\n3. Отписаться от всего и подписаться на каналы из channels.txt"
-                      "\n4. Первонах\n")
+                      "\n3. Подписаться на каналы"
+                      "\n4. Отписаться от всего и подписаться на каналы из channels.txt"
+                      "\n5. Первонах\n")
         if point == "1":
             await edit_all(active_user_bots)
             logging.info("Аккаунты завершили редактирование")
+
         elif point == "2":
             await unsubscribe_all(active_user_bots)
             await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
+
         elif point == "3":
+            try:
+                await subscribe_all(channels, active_user_bots)
+            except Exception as e:
+                logging.exception(e)
+            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+
+        elif point == "4":
             await unsubscribe_all(active_user_bots)
             try:
                 await subscribe_all(channels, active_user_bots)
             except Exception as e:
                 logging.exception(e)
             await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
-        elif point == "4":
+
+        elif point == "5":
             run_pervonax(active_user_bots)
             break
         else:

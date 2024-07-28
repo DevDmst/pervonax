@@ -332,7 +332,7 @@ class UserBot:
             hash_ = chat_link[chat_link.index("+") + 1:]
             response = await self._client(ImportChatInviteRequest(hash_))
         elif 'joinchat' in chat_link:
-            index = chat_link.index("joinchat") + 8
+            index = chat_link.index("joinchat") + 9
             response = await self._client(ImportChatInviteRequest(chat_link[index:]))
         else:  # username or link
             response = await self._client(JoinChannelRequest(chat_link))

@@ -13,7 +13,7 @@ from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
     UsernameOccupiedError, UsernameNotModifiedError, FloodWaitError, InviteRequestSentError, \
     UserAlreadyParticipantError, ChannelPrivateError, PeerFloodError, UserBannedInChannelError, ChatWriteForbiddenError, \
-    ForbiddenError
+    ForbiddenError, ChatAdminRequiredError
 from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
@@ -438,7 +438,9 @@ class UserBot:
                     logging.info(f"{self._account_name} - FloodWaitError - {e.seconds + 30}")
                     await asyncio.sleep(e.seconds + 30)
                 except ChannelPrivateError as e:
-                    logging.error(e)
+                    pass
+                except ChatAdminRequiredError as e:
+                    pass
                 except Exception as e:
                     msg = f"{self._account_name} - Неожиданное исключение - {type(e)} - {e}"
                     logging.error(msg)

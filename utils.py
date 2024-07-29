@@ -3,10 +3,12 @@ import logging
 import os
 import random
 import re
+import shutil
 import string
 from pathlib import Path
 
 _telegram_link_pattern = r'https://t.me/.+'
+
 
 def get_sessions(path_to_folder: str) -> dict:
     """
@@ -91,6 +93,7 @@ def get_channels(path: str):
         channels = [channel.strip() for channel in channels if is_tg_link(channel)]
         return channels
 
+
 def cyclic_iterator(items):
     if not items:
         raise ValueError("The list is empty")
@@ -98,3 +101,29 @@ def cyclic_iterator(items):
     while True:
         yield items[index]
         index = (index + 1) % len(items)
+
+
+def move_file(source_path: str, destination_folder: str):
+    try:
+        if not os.path.isfile(source_path):
+            logging.error(f"Файл {source_path} не существует.")
+            return
+
+        if not os.path.exists(destination_folder):
+            os.makedirs(destination_folder, exist_ok=True)
+
+        file_name = os.path.basename(source_path)
+
+        destination_path = os.path.join(destination_folder, file_name)
+
+        shutil.move(source_path, destination_path)
+        logging.info(f"Файл успешно перемещен в {destination_path}.")
+
+    except Exception as e:
+        logging.error(f"Произошла ошибка при перемещении файла: {str(e)}")
+
+
+def save_file(file_path: str, items: list[str]):
+    """Сохраняет объект `items` в файл `file_path`"""
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.write('\n'.join(items))

@@ -8,6 +8,7 @@ import re
 import traceback
 from asyncio import Task
 from datetime import datetime, timedelta
+from typing import Callable
 
 from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
@@ -28,7 +29,7 @@ from config_and_settings import settings
 from db.repositories import AccountsChatsRepo
 from services.message_generator import MessageGenerator
 from services.notifier import Notifier
-from user_bot.exceptions import LinkBioBan
+from user_bot.exceptions import LinkBioBan, BadChatLink
 
 
 def log_decorator(func):
@@ -61,10 +62,13 @@ class UserBot:
                  delay_between_comments: list[int],
                  session_path: str,
                  json_path: str | None,
+                 rm_chat: Callable,
                  api_id: str = None,
                  api_hash: str = None,
                  proxy: dict | None = None,
                  ):
+        self._bad_session_file_path = "bad_sessions"
+        self._rm_chat = rm_chat
         self._tg_id = None
         self.db_acc_id = account_id
         self._session_path = session_path
@@ -318,12 +322,20 @@ class UserBot:
             seconds_ = e.seconds + 30
             logging.info(f"{self._account_name} - FloodWaitError - подписка - жду {seconds_} сек.")
             await asyncio.sleep(seconds_)
-            response = await self._send_subscribe_request(chat_link)
-            return response
+            return await self._subscribe(chat_link)
 
         except InviteHashExpiredError as e:
             logging.error(f"{self._account_name} - InviteHashExpiredError - {chat_link}")
-            return None
+            raise BadChatLink(chat_link)
+
+        except ConnectionError as e:
+            await asyncio.sleep(60)
+            try:
+                await self._client.connect()
+            except OSError:
+                raise e
+
+            return await self._subscribe(chat_link)
 
         except ValueError as e:
             if str(e).startswith("No user has"):
@@ -437,10 +449,30 @@ class UserBot:
 
             try:
                 data = await self._subscribe(chat)
+                # обновляем время последней подписки только в том случае, если она была успешной
+                if data:
+                    self._last_subscribe_datetime = datetime.utcnow()
+            except ConnectionError as e:  # если мы тут, значит аккаунт скорее всего в бане
+                logging.exception(e)
+                await self._notifier.notify(
+                    self._admin_id,
+                    f"Аккаунт {self._account_name} похоже ушёл в бан."
+                    f" Файл сессии был перемещён в папку невалидных сессий."
+                )
+                try:
+                    await self._client.disconnect()
+                except:
+                    pass
+                utils.move_file(self._session_path, self._bad_session_file_path)
+                break
+            except BadChatLink as e:
+                # нужно удалить этот чат из файла channels.txt
+                chat_link = e.chat_link
+                self._rm_chat(chat_link)
+                logging.info(f"Ссылка {chat_link} была удалена из channels.txt")
+
             except Exception as e:
                 logging.exception(e)
-
-            self._last_subscribe_datetime = datetime.utcnow()
 
             # await self._notify_sub_observers(chat, data)
 

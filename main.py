@@ -57,7 +57,7 @@ async def unsubscribe_all(user_bots: list[UserBot]):
 
 async def subscribe_all(channels: list[str], active_user_bots: list[UserBot]):
     channels_per_acc = len(channels) / len(active_user_bots)
-    secs_per_channel = random.choice(settings.delay_between_subscriptions)
+    secs_per_channel = int((sum(settings.delay_between_subscriptions) / 2))
     secs = math.ceil(channels_per_acc * secs_per_channel)
     working_time = str(timedelta(seconds=secs))
     logging.info("Начинаю подписку на каналы.\n"
@@ -131,6 +131,11 @@ def run_pervonax(user_bots: list[UserBot]):
     logging.info("Написание комментариев активировано")
 
 
+def rm_chat(channels: list[str], chat_link: str):
+    channels.remove(chat_link)
+    utils.save_file(PATH_TO_CHANNELS_FILE, channels)
+
+
 async def main():
     logging.info("Аккаунты запускаются.. ожидайте..")
     await create_tables()
@@ -181,6 +186,7 @@ async def main():
                 api_id=config.api_id,
                 api_hash=config.api_hash,
                 proxy=proxy,
+                rm_chat=rm_chat
             )
             me = await user_bot.start()
             if me:

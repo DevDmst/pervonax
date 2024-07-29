@@ -37,7 +37,6 @@ def log_decorator(func):
     async def wrapper(self, *args, **kwargs):
         logger = logging.getLogger(func.__qualname__)
 
-        logger.info(f"Account: {self._account_name}")
         try:
             result = await func(self, *args, **kwargs)
             logger.info(f"Account: {self._account_name} | Успешно")

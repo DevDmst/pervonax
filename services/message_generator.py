@@ -5,7 +5,7 @@ import re
 class MessageGenerator:
     def __init__(self, templates_file_path: str):
         self._templates_file_path = templates_file_path
-        with open(templates_file_path, "w", encoding="utf-8") as f:
+        with open(templates_file_path, "r", encoding="utf-8") as f:
             templates = f.readlines()
             self._templates = [template.strip() for template in templates if template.strip() and not template.startswith("#")]
         self._pattern = re.compile(r'\{([^}]+)\}')

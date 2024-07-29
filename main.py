@@ -133,11 +133,6 @@ def run_pervonax(user_bots: list[UserBot]):
     logging.info("Написание комментариев активировано")
 
 
-def rm_chat(channels: list[str], chat_link: str):
-    channels.remove(chat_link)
-    utils.save_file(PATH_TO_CHANNELS_FILE, channels)
-
-
 async def main():
     logging.info("Аккаунты запускаются.. ожидайте..")
     await create_tables()
@@ -151,6 +146,10 @@ async def main():
 
     message_generator = MessageGenerator(DATA_MAILING_TXT)
     notifier = Notifier(config.bot_token)
+
+    def rm_chat(chat_link: str):
+        channels.remove(chat_link)
+        utils.save_file(PATH_TO_CHANNELS_FILE, channels)
 
     async with Session() as db_session:
         # добавляем прокси в бд

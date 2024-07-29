@@ -44,7 +44,7 @@ def log_decorator(func):
         except Exception as e:
             logger.error(f"Account: {self.account_name} "
                          f"| Метод {func.__name__} завершился с ошибкой: {e}, тип ошибки {type(e)}")
-            raise
+            raise e
         except:
             logging.error(f"WTF IS GOING ON!")
 
@@ -167,7 +167,7 @@ class UserBot:
     async def _handle_new_msg(self, event):
         if not self.is_writing_comments_enabled:
             return
-        print(2342132)
+
         if event.message and event.message.replies is not None:
             chat_id = event.message.peer_id.channel_id
             if event.replies.comments and chat_id not in self.blacklist:

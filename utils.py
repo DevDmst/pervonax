@@ -5,6 +5,7 @@ import random
 import re
 import shutil
 import string
+from datetime import datetime
 from pathlib import Path
 
 _telegram_link_pattern = r'https://t.me/.+'
@@ -127,3 +128,18 @@ def save_file(file_path: str, items: list[str]):
     """Сохраняет объект `items` в файл `file_path`"""
     with open(file_path, 'w', encoding='utf-8') as file:
         file.write('\n'.join(items))
+
+
+def is_datetime(dt_or_number: str):
+    try:
+        return datetime.strptime(dt_or_number, "%H:%M %d.%m.%Y")
+    except:
+        return False
+
+
+def is_number(dt_or_number: str):
+    try:
+        float(dt_or_number)
+        return True
+    except:
+        return False

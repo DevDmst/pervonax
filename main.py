@@ -202,7 +202,6 @@ async def main():
                 acc.active = False
                 await db_session.commit()
 
-
     while True:
         await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
         point = await ainput("\nВыберите пункт:"
@@ -235,6 +234,20 @@ async def main():
             await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
 
         elif point == "5":
+            if settings.timer_pervonax:
+                dt_or_number: str = await ainput("Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")
+                if utils.is_number(dt_or_number):  # кол-во часов
+                    td = timedelta(hours=float(dt_or_number))
+                elif dt := utils.is_datetime(dt_or_number):
+                    if dt <= datetime.utcnow():
+                        print("Дата должна быть больше текущего момента\n")
+                        continue
+                    td = dt - datetime.utcnow()
+                else:
+                    print("Ошибка формата\n")
+                    continue
+                print(f"Запущу первонах через {str(td)}\n")
+                await asyncio.sleep(td.total_seconds())
             run_pervonax(active_user_bots)
             break
         else:

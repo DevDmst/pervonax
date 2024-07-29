@@ -203,6 +203,7 @@ async def main():
                 acc.active = False
                 await db_session.commit()
 
+
     while True:
         await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
         point = await ainput("\nВыберите пункт:"

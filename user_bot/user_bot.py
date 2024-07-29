@@ -39,12 +39,14 @@ def log_decorator(func):
 
         try:
             result = await func(self, *args, **kwargs)
-            logger.info(f"Account: {self._account_name} | Успешно")
+            logger.info(f"Account: {self.account_name} | Успешно")
             return result
         except Exception as e:
-            logger.error(f"Account: {self._account_name} "
+            logger.error(f"Account: {self.account_name} "
                          f"| Метод {func.__name__} завершился с ошибкой: {e}, тип ошибки {type(e)}")
             raise
+        except:
+            logging.error(f"WTF IS GOING ON!")
 
     return wrapper
 
@@ -80,7 +82,7 @@ class UserBot:
         self._delay_before_comment = delay_before_comment
         self._delay_between_comments = delay_between_comments
         self._admin_id = admin_id
-        self._account_name = account_name
+        self.account_name = account_name
 
         self._client = TelegramClient(
             session=session_path,
@@ -101,6 +103,8 @@ class UserBot:
 
         self._counter_messages = 0
         self.blacklist = []
+
+        self.process_subscribe_pending = False
 
     @log_decorator
     async def start(self):
@@ -227,7 +231,7 @@ class UserBot:
                     count_lbb += 1
                     raise LinkBioBan
 
-                logging.info(f'{self._account_name} | Сообщение №{self._counter_messages} - message({message}) '
+                logging.info(f'{self.account_name} | Сообщение №{self._counter_messages} - message({message}) '
                              f'отправлено в комментарий канала: id{event.message.peer_id.channel_id}')
                 break
 
@@ -240,17 +244,17 @@ class UserBot:
                 if time_out_counter > 4:
                     await self._notifier.notify(
                         self._admin_id,
-                        f'{self._account_name} | Ошибка TimeoutError после 5-и попыток отправить комментарий')
+                        f'{self.account_name} | Ошибка TimeoutError после 5-и попыток отправить комментарий')
                     break
 
             except FloodWaitError as e:
-                logging.warning(f'{self._account_name} | FloodWaitError, ожидание {e.seconds + 20} секунд')
+                logging.warning(f'{self.account_name} | FloodWaitError, ожидание {e.seconds + 20} секунд')
                 await asyncio.sleep(e.seconds + 20)
 
             except ChannelPrivateError:
                 await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
-                    f'{self._account_name} | Указанный канал id{event.message.peer_id.channel_id} является частным,'
+                    f'{self.account_name} | Указанный канал id{event.message.peer_id.channel_id} является частным,'
                     f' и у вас нет прав на доступ к нему. Другая причина может заключаться в том, что вас забанили. '
                     f'Добавлен в чс')
                 self.blacklist.append(event.message.peer_id.channel_id)
@@ -259,7 +263,7 @@ class UserBot:
             except UserBannedInChannelError:
                 await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
-                    f'{self._account_name} | Вам запрещено отправлять сообщения в супергруппах/каналах. '
+                    f'{self.account_name} | Вам запрещено отправлять сообщения в супергруппах/каналах. '
                     f'Группа канала id{event.message.peer_id.channel_id} - публичная! Добавлен в чс')
                 self.blacklist.append(event.message.peer_id.channel_id)
                 break
@@ -267,7 +271,7 @@ class UserBot:
             except (ValueError, ChatWriteForbiddenError):
                 await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
-                    f'{self._account_name} | Запрещено писать! Вы больше не можете оставлять комментарии в группе канала '
+                    f'{self.account_name} | Запрещено писать! Вы больше не можете оставлять комментарии в группе канала '
                     f'id{event.message.peer_id.channel_id}. Добавлен в чс')
                 self.blacklist.append(event.message.peer_id.channel_id)
                 break
@@ -275,22 +279,22 @@ class UserBot:
             except LinkBioBan:
                 if count_lbb > 10:
                     await self._client.disconnect()
-                    msg = f"Клиент {self._account_name} был отключён, причина: LinkBioBan"
+                    msg = f"Клиент {self.account_name} был отключён, причина: LinkBioBan"
                     logging.info(msg)
                     await self._notifier.notify(self._admin_id, msg)
                     break
 
             except ForbiddenError as e:
-                msg = f'{self._account_name} | Действия в канале id{event.message.peer_id.channel_id} ограничены админами'
+                msg = f'{self.account_name} | Действия в канале id{event.message.peer_id.channel_id} ограничены админами'
                 logging.error(msg)
                 await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 self.blacklist.append(event.message.peer_id.channel_id)
                 break
 
             except Exception as e:
-                msg = f'{self._account_name} | Действия в канале id{event.message.peer_id.channel_id} ограничены админами. Добавлен в чс'
+                msg = f'{self.account_name} | Действия в канале id{event.message.peer_id.channel_id} ограничены админами. Добавлен в чс'
                 logging.error(msg)
-                logging.error(f'{self._account_name} | {traceback.format_exc()}')
+                logging.error(f'{self.account_name} | {traceback.format_exc()}')
                 await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 self.blacklist.append(event.message.peer_id.channel_id)
                 raise e
@@ -319,12 +323,12 @@ class UserBot:
 
         except FloodWaitError as e:
             seconds_ = e.seconds + 30
-            logging.info(f"{self._account_name} - FloodWaitError - подписка - жду {seconds_} сек.")
+            logging.info(f"{self.account_name} - FloodWaitError - подписка - жду {seconds_} сек.")
             await asyncio.sleep(seconds_)
             return await self._subscribe(chat_link)
 
         except InviteHashExpiredError as e:
-            logging.error(f"{self._account_name} - InviteHashExpiredError - {chat_link}")
+            logging.error(f"{self.account_name} - InviteHashExpiredError - {chat_link}")
             raise BadChatLink(chat_link)
 
         except ConnectionError as e:
@@ -337,6 +341,7 @@ class UserBot:
             return await self._subscribe(chat_link)
 
         except ValueError as e:
+            logging.exception(e)
             if str(e).startswith("No user has"):
                 return None
             else:
@@ -437,25 +442,24 @@ class UserBot:
     async def _process_sub_queue(self):
         while True:
             chat = await self.subscribe_queue.get()
-
+            self.process_subscribe_pending = True
             time_from_last_sub = datetime.utcnow() - self._last_subscribe_datetime
             delay = timedelta(seconds=random.randint(*self._delay_between_subscriptions))
 
             if time_from_last_sub < delay:
                 seconds = (delay - time_from_last_sub).total_seconds()
-                logging.info(f"{self._account_name} - пауза в подписке {seconds} сек.")
+                logging.info(f"{self.account_name} - пауза в подписке {seconds} сек.")
                 await asyncio.sleep(seconds)
 
             try:
                 data = await self._subscribe(chat)
                 # обновляем время последней подписки только в том случае, если она была успешной
-                if data:
-                    self._last_subscribe_datetime = datetime.utcnow()
+                self._last_subscribe_datetime = datetime.utcnow()
             except ConnectionError as e:  # если мы тут, значит аккаунт скорее всего в бане
                 logging.exception(e)
                 await self._notifier.notify(
                     self._admin_id,
-                    f"Аккаунт {self._account_name} похоже ушёл в бан."
+                    f"Аккаунт {self.account_name} похоже ушёл в бан."
                     f" Файл сессии был перемещён в папку невалидных сессий."
                 )
                 try:
@@ -473,7 +477,7 @@ class UserBot:
             except Exception as e:
                 logging.exception(e)
 
-            # await self._notify_sub_observers(chat, data)
+            self.process_subscribe_pending = False
 
     async def _process_comment_queue(self):
         while True:
@@ -482,7 +486,7 @@ class UserBot:
             try:
                 await self._write_comment(event)
             except Exception as e:
-                msg = f"{self._account_name} - {type(e)} - {str(e)}"
+                msg = f"{self.account_name} - {type(e)} - {str(e)}"
                 logging.error(msg)
                 logging.exception(e)
                 await self._notifier.notify(self._admin_id, msg)
@@ -496,23 +500,23 @@ class UserBot:
                 try:
                     await self._client.delete_dialog(dialog, revoke=True)
                     i += 1
-                    logging.info(f"{self._account_name} - Удалил чат №{i}")
+                    logging.info(f"{self.account_name} - Удалил чат №{i}")
                     break
                 except FloodWaitError as e:
-                    logging.info(f"{self._account_name} - FloodWaitError - {e.seconds + 30}")
+                    logging.info(f"{self.account_name} - FloodWaitError - {e.seconds + 30}")
                     await asyncio.sleep(e.seconds + 30)
                 except ChannelPrivateError as e:
                     break
                 except ChatAdminRequiredError as e:
                     break
                 except Exception as e:
-                    msg = f"{self._account_name} - Неожиданное исключение - {type(e)} - {e}"
+                    msg = f"{self.account_name} - Неожиданное исключение - {type(e)} - {e}"
                     logging.error(msg)
                     logging.exception(e)
                     await self._notifier.notify(self._admin_id, msg)
                     break
 
-        logging.info(f"{self._account_name} - Отписался от (каналов или групп): {i}")
+        logging.info(f"{self.account_name} - Отписался от (каналов или групп): {i}")
 
     @log_decorator
     async def _delete_stories(self):
@@ -535,7 +539,7 @@ class UserBot:
                     await asyncio.sleep(1)
                     await self._client(functions.account.ResetAuthorizationRequest(session.hash))
                 except Exception as e:
-                    logging.error(f"{self._account_name} - {type(e)} - {e}")
+                    logging.error(f"{self.account_name} - {type(e)} - {e}")
 
     async def _set_privacy(self):
         fields = [
@@ -576,4 +580,4 @@ class UserBot:
                 ))
                 await asyncio.sleep(1)
             except Exception as e:
-                logging.error(f"{self._account_name} - {type(e)} - {e}")
+                logging.error(f"{self.account_name} - {type(e)} - {e}")

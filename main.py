@@ -87,18 +87,16 @@ async def subscribe_all(channels: list[str], active_user_bots: list[UserBot]):
             }, db_session)
 
             await user_bot.subscribe_queue.put(channel)
+            logging.info(f"Аккаунт {user_bot.account_name} -- канал {channel}")
 
     while True:
         flag = True
         for user_bot in active_user_bots:
-            is_empty = user_bot.subscribe_queue.empty()
-            if not is_empty:
-                flag = False
-                break
-            flag = flag and user_bot.subscribe_queue.empty()
+            is_finish = user_bot.subscribe_queue.empty() and not user_bot.process_subscribe_pending
+            flag *= is_finish
         if flag:
             break
-        await asyncio.sleep(10)
+        await asyncio.sleep(1)
 
     logging.info("Подписка завершена.\n")
 

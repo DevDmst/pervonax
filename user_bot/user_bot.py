@@ -52,6 +52,8 @@ def log_decorator(func):
 
 
 class UserBot:
+    counter_messages: int = 0
+
     def __init__(self,
                  account_id: int,
                  account_name: str,
@@ -237,8 +239,9 @@ class UserBot:
                     count_lbb += 1
                     raise LinkBioBan
 
-                logging.info(f'{self.account_name} | Сообщение №{self._counter_messages} - message({message}) '
+                logging.info(f'{self.account_name} | Сообщение №{UserBot.counter_messages} - message({message}) '
                              f'отправлено в комментарий канала: id{event.message.peer_id.channel_id}')
+                UserBot.counter_messages += 1
                 break
 
             except ConnectionError as e:

@@ -14,7 +14,7 @@ from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
     UsernameOccupiedError, UsernameNotModifiedError, FloodWaitError, InviteRequestSentError, \
     UserAlreadyParticipantError, ChannelPrivateError, PeerFloodError, UserBannedInChannelError, ChatWriteForbiddenError, \
-    ForbiddenError, ChatAdminRequiredError, InviteHashExpiredError
+    ForbiddenError, ChatAdminRequiredError, InviteHashExpiredError, ChatGuestSendForbiddenError
 from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
@@ -218,6 +218,7 @@ class UserBot:
 
         count_lbb = 0
         time_out_counter = 0
+        first_try = True
         while True:
             chat_id = event.message.peer_id.channel_id
             try:
@@ -252,16 +253,22 @@ class UserBot:
                 await asyncio.sleep(e.seconds + 20)
 
             except ChannelPrivateError:
-                await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
                     f'{self.account_name} | Указанный канал id{event.message.peer_id.channel_id} является частным,'
                     f' и у вас нет прав на доступ к нему. Другая причина может заключаться в том, что вас забанили. '
                     f'Добавлен в чс')
                 self.blacklist.append(event.message.peer_id.channel_id)
                 break
-
+            except ChatGuestSendForbiddenError as e:
+                if not first_try:
+                    logging.info(f"{self.account_name} - ChatGuestSendForbiddenError - не удалось отправить комментарий")
+                    break
+                await self.subscribe_queue.put(event.replies.channel_id)
+                await asyncio.sleep(10)
+                first_try = False
             except UserBannedInChannelError:
-                await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
                     f'{self.account_name} | Вам запрещено отправлять сообщения в супергруппах/каналах. '
                     f'Группа канала id{event.message.peer_id.channel_id} - публичная! Добавлен в чс')
@@ -269,7 +276,7 @@ class UserBot:
                 break
 
             except (ValueError, ChatWriteForbiddenError):
-                await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
                     f'{self.account_name} | Запрещено писать! Вы больше не можете оставлять комментарии в группе канала '
                     f'id{event.message.peer_id.channel_id}. Добавлен в чс')
@@ -287,7 +294,7 @@ class UserBot:
             except ForbiddenError as e:
                 msg = f'{self.account_name} | Действия в канале id{event.message.peer_id.channel_id} ограничены админами'
                 logging.error(msg)
-                await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 self.blacklist.append(event.message.peer_id.channel_id)
                 break
 
@@ -295,7 +302,7 @@ class UserBot:
                 msg = f'{self.account_name} | Действия в канале id{event.message.peer_id.channel_id} ограничены админами. Добавлен в чс'
                 logging.error(msg)
                 logging.error(f'{self.account_name} | {traceback.format_exc()}')
-                await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 self.blacklist.append(event.message.peer_id.channel_id)
                 raise e
 

@@ -87,7 +87,7 @@ async def subscribe_all(channels: list[str], active_user_bots: list[UserBot]):
             }, db_session)
 
             await user_bot.subscribe_queue.put(channel)
-            logging.info(f"Аккаунт {user_bot.account_name} -- канал {channel}")
+            # logging.info(f"Аккаунт {user_bot.account_name} -- канал {channel}")
 
     while True:
         flag = True

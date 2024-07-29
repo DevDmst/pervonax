@@ -89,6 +89,8 @@ class UserBot:
             proxy=proxy,
             **self._get_session_params
         )
+        event = events.NewMessage(incoming=True, func=lambda e: e.is_channel)
+        self._client.add_event_handler(self._handle_new_msg, event)
 
         self._semaphore = asyncio.Semaphore(1)
         self._last_subscribe_datetime = datetime.utcnow().replace(year=2000)
@@ -104,6 +106,7 @@ class UserBot:
         self._counter_messages = 0
         self.blacklist = []
 
+        self.is_writing_comments_enabled = False
         self.process_subscribe_pending = False
 
     @log_decorator
@@ -116,8 +119,7 @@ class UserBot:
             return False
 
     def run_writing_comments(self):
-        event = events.NewMessage(incoming=True, func=lambda e: e.is_channel)
-        self._client.add_event_handler(self._handle_new_msg, event)
+        self.is_writing_comments_enabled = True
 
     @log_decorator
     async def edit_profile(self, photo: str, first_name: str, last_name: str, about: str):
@@ -163,6 +165,9 @@ class UserBot:
             await observer_func(self.db_acc_id, chat, data)
 
     async def _handle_new_msg(self, event):
+        if not self.is_writing_comments_enabled:
+            return
+        print(2342132)
         if event.message and event.message.replies is not None:
             chat_id = event.message.peer_id.channel_id
             if event.replies.comments and chat_id not in self.blacklist:
@@ -355,12 +360,15 @@ class UserBot:
                 raise e
 
     async def _send_subscribe_request(self, chat_link):
-        if isinstance(chat_link, str) and "+" in chat_link:  # invite link
-            hash_ = chat_link[chat_link.index("+") + 1:]
-            response = await self._client(ImportChatInviteRequest(hash_))
-        elif 'joinchat' in chat_link:
-            index = chat_link.index("joinchat") + 9
-            response = await self._client(ImportChatInviteRequest(chat_link[index:]))
+        if isinstance(chat_link, str):
+            if "+" in chat_link:  # invite link
+                hash_ = chat_link[chat_link.index("+") + 1:]
+                response = await self._client(ImportChatInviteRequest(hash_))
+            elif 'joinchat' in chat_link:
+                index = chat_link.index("joinchat") + 9
+                response = await self._client(ImportChatInviteRequest(chat_link[index:]))
+            else:
+                raise ValueError(f"Неверный аргумент подписки {chat_link}")
         else:  # username or link
             response = await self._client(JoinChannelRequest(chat_link))
         return response

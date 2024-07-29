@@ -5,6 +5,8 @@ import os
 import random
 from datetime import datetime, timedelta
 
+from aioconsole import ainput
+
 from config_and_settings import config, settings
 from db import Session
 from db.repositories import AccountsChatsRepo
@@ -16,6 +18,8 @@ from services.message_generator import MessageGenerator
 from services.notifier import Notifier
 from user_bot.user_bot import UserBot
 import utils
+
+import aioconsole
 
 PATH_TO_SESSIONS_FOLDER = "sessions"
 PATH_TO_PROXY_FILE = "data/proxy.txt"
@@ -87,7 +91,7 @@ async def subscribe_all(channels: list[str], active_user_bots: list[UserBot]):
             }, db_session)
 
             await user_bot.subscribe_queue.put(channel)
-            logging.info(f"Аккаунт {user_bot.account_name} -- канал {channel}")
+            # logging.info(f"Аккаунт {user_bot.account_name} -- канал {channel}")
 
     while True:
         flag = True
@@ -201,12 +205,12 @@ async def main():
 
     while True:
         await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
-        point = input("\nВыберите пункт:"
-                      "\n1. Отредактировать все профили"
-                      "\n2. Отписаться от всего"
-                      "\n3. Подписаться на каналы"
-                      "\n4. Отписаться от всего и подписаться на каналы из channels.txt"
-                      "\n5. Первонах\n")
+        point = await ainput("\nВыберите пункт:"
+                             "\n1. Отредактировать все профили"
+                             "\n2. Отписаться от всего"
+                             "\n3. Подписаться на каналы"
+                             "\n4. Отписаться от всего и подписаться на каналы из channels.txt"
+                             "\n5. Первонах\n")
         if point == "1":
             await edit_all(active_user_bots)
             logging.info("Аккаунты завершили редактирование")

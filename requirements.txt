@@ -6,3 +6,4 @@ PyYAML
 tiktoken
 openai
 sqlalchemy
+aioconsole

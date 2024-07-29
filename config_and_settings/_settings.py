@@ -36,3 +36,4 @@ class Settings:
 
     close_other_sessions: bool
 
+    timer_pervonax: bool

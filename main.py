@@ -201,7 +201,9 @@ async def main():
                 logging.info(f"Не удалось запустить сессию {name}, перемещаю в bad_sessions")
                 acc.active = False
                 await user_bot.disconnect()
-                utils.move_file(tg_session["session"], user_bot.bad_sessions_folder)
+                session = tg_session.get("session", None)
+                if session:
+                    utils.move_file(session, user_bot.bad_sessions_folder)
                 json_path = tg_session.get("json", None)
                 if json_path:
                     utils.move_file(json_path, user_bot.bad_sessions_folder)

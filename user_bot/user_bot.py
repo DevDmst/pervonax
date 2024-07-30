@@ -141,7 +141,8 @@ class UserBot:
                         await self._client.disconnect()
                     except:
                         pass
-                    utils.move_file(self._session_path, self.bad_sessions_folder)
+                    if self._session_path:
+                        utils.move_file(self._session_path, self.bad_sessions_folder)
                     if self._json_path:
                         utils.move_file(self._json_path, self.bad_sessions_folder)
 
@@ -526,7 +527,8 @@ class UserBot:
                     await self._client.disconnect()
                 except:
                     pass
-                utils.move_file(self._session_path, self.bad_sessions_folder)
+                if self._session_path:
+                    utils.move_file(self._session_path, self.bad_sessions_folder)
                 if self._json_path:
                     utils.move_file(self._json_path, self.bad_sessions_folder)
                 break

@@ -198,8 +198,10 @@ async def main():
                 await db_session.commit()
                 user_bot.tg_id = me.id
             else:
-                logging.info(f"Не удалось запустить сессию {name}")
+                logging.info(f"Не удалось запустить сессию {name}, перемещаю в bad_sessions")
                 acc.active = False
+                utils.move_file(tg_session["session"], user_bot.bad_sessions_folder)
+                logging.info(f"Account: {user_bot.account_name} is banned")
                 await db_session.commit()
 
     while True:

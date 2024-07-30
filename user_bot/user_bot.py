@@ -73,7 +73,7 @@ class UserBot:
                  api_hash: str = None,
                  proxy: dict | None = None,
                  ):
-        self._bad_session_file_path = "bad_sessions"
+        self.bad_sessions_folder = "bad_sessions"
         self._rm_chat = rm_chat
         self._tg_id = None
         self.db_acc_id = account_id
@@ -141,7 +141,7 @@ class UserBot:
                         await self._client.disconnect()
                     except:
                         pass
-                    utils.move_file(self._session_path, self._bad_session_file_path)
+                    utils.move_file(self._session_path, self.bad_sessions_folder)
                     logging.info(f"Account: {self.account_name} is banned")
                     break
 
@@ -523,7 +523,7 @@ class UserBot:
                     await self._client.disconnect()
                 except:
                     pass
-                utils.move_file(self._session_path, self._bad_session_file_path)
+                utils.move_file(self._session_path, self.bad_sessions_folder)
                 break
             except BadChatLink as e:
                 # нужно удалить этот чат из файла channels.txt

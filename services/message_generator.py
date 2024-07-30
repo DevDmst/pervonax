@@ -29,7 +29,3 @@ class MessageGenerator:
         ...
 
 
-if __name__ == '__main__':
-    generator = MessageGenerator(templates_file_path=r'C:\Users\Dmitry\Home\Programming\PytonProjects\Payment_projects\07_2024\tg_orders\pervonax\data\mailing.txt')
-    msg = generator.generate_random_msg()
-    print(msg)

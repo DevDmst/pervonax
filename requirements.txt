@@ -7,3 +7,4 @@ tiktoken
 openai
 sqlalchemy
 aioconsole
+cryptg

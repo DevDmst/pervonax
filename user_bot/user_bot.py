@@ -14,7 +14,10 @@ from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
     UsernameOccupiedError, UsernameNotModifiedError, FloodWaitError, InviteRequestSentError, \
     UserAlreadyParticipantError, ChannelPrivateError, PeerFloodError, UserBannedInChannelError, ChatWriteForbiddenError, \
-    ForbiddenError, ChatAdminRequiredError, InviteHashExpiredError, ChatGuestSendForbiddenError
+    ForbiddenError, ChatAdminRequiredError, InviteHashExpiredError, ChatGuestSendForbiddenError, MsgIdInvalidError, \
+    SlowModeWaitError, UserDeactivatedBanError, RPCError, UserDeactivatedError, AuthKeyUnregisteredError, \
+    AuthKeyPermEmptyError
+from telethon.tl import types
 from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
@@ -106,7 +109,7 @@ class UserBot:
         self._comment_task = asyncio.create_task(self._process_comment_queue())
 
         self._counter_messages = 0
-        self.blacklist = []
+        self.blacklist = set()
 
         self.is_writing_comments_enabled = False
         self.process_subscribe_pending = False
@@ -116,9 +119,31 @@ class UserBot:
         try:
             await self._client.connect()
             me_ = await self._client.get_me()
+            self._tg_id = me_.id
+            asyncio.create_task(self.disconnect_watcher())
             return me_
         except Exception as e:
             return False
+
+    async def disconnect_watcher(self):
+        while True:
+            await asyncio.sleep(5)
+            if not self._client.is_connected():
+                try:
+                    await self._client.connect()
+                except Exception as e:
+                    await self._notifier.notify(
+                        self._admin_id,
+                        f"Аккаунт {self.account_name} похоже ушёл в бан."
+                        f" Файл сессии был перемещён в папку невалидных сессий."
+                    )
+                    try:
+                        await self._client.disconnect()
+                    except:
+                        pass
+                    utils.move_file(self._session_path, self._bad_session_file_path)
+                    logging.info(f"Account: {self.account_name} is banned")
+                    break
 
     def run_writing_comments(self):
         self.is_writing_comments_enabled = True
@@ -266,21 +291,35 @@ class UserBot:
                     f'{self.account_name} | Указанный канал id{event.message.peer_id.channel_id} является частным,'
                     f' и у вас нет прав на доступ к нему. Другая причина может заключаться в том, что вас забанили. '
                     f'Добавлен в чс')
-                self.blacklist.append(event.message.peer_id.channel_id)
+                self.blacklist.add(event.message.peer_id.channel_id)
                 break
+
             except ChatGuestSendForbiddenError as e:
                 if not first_try:
-                    logging.info(f"{self.account_name} - ChatGuestSendForbiddenError - не удалось отправить комментарий")
+                    logging.info(
+                        f"{self.account_name} - ChatGuestSendForbiddenError - не удалось отправить комментарий")
                     break
                 await self.subscribe_queue.put(event.replies.channel_id)
                 await asyncio.sleep(10)
                 first_try = False
+
+            except MsgIdInvalidError as e:
+                # возможно сообщение было удалено, комментарий невозможен
+                break
+
+            except SlowModeWaitError as e:
+                seconds = e.seconds
+                channel_id = event.message.peer_id.channel_id
+                self.blacklist.add(channel_id)
+                asyncio.create_task(self._remove_channel_from_bl_after(channel_id, seconds))
+                break
+
             except UserBannedInChannelError:
                 # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
                     f'{self.account_name} | Вам запрещено отправлять сообщения в супергруппах/каналах. '
                     f'Группа канала id{event.message.peer_id.channel_id} - публичная! Добавлен в чс')
-                self.blacklist.append(event.message.peer_id.channel_id)
+                self.blacklist.add(event.message.peer_id.channel_id)
                 break
 
             except (ValueError, ChatWriteForbiddenError):
@@ -288,7 +327,7 @@ class UserBot:
                 logging.info(
                     f'{self.account_name} | Запрещено писать! Вы больше не можете оставлять комментарии в группе канала '
                     f'id{event.message.peer_id.channel_id}. Добавлен в чс')
-                self.blacklist.append(event.message.peer_id.channel_id)
+                self.blacklist.add(event.message.peer_id.channel_id)
                 break
 
             except LinkBioBan:
@@ -303,7 +342,7 @@ class UserBot:
                 msg = f'{self.account_name} | Действия в канале id{event.message.peer_id.channel_id} ограничены админами'
                 logging.error(msg)
                 # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
-                self.blacklist.append(event.message.peer_id.channel_id)
+                self.blacklist.add(event.message.peer_id.channel_id)
                 break
 
             except Exception as e:
@@ -311,7 +350,7 @@ class UserBot:
                 logging.error(msg)
                 logging.error(f'{self.account_name} | {traceback.format_exc()}')
                 # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
-                self.blacklist.append(event.message.peer_id.channel_id)
+                self.blacklist.add(event.message.peer_id.channel_id)
                 raise e
 
     @log_decorator
@@ -491,6 +530,7 @@ class UserBot:
                 chat_link = e.chat_link
                 self._rm_chat(chat_link)
                 logging.info(f"Ссылка {chat_link} была удалена из channels.txt")
+                await asyncio.sleep(5)
 
             except Exception as e:
                 logging.exception(e)
@@ -569,7 +609,8 @@ class UserBot:
                 "rules": [InputPrivacyValueAllowAll()] if settings.privacy_avatar else [InputPrivacyValueDisallowAll()]
             }, {
                 "key": InputPrivacyKeyBirthday(),
-                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_birthday else [InputPrivacyValueDisallowAll()]
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_birthday else [
+                    InputPrivacyValueDisallowAll()]
             }, {
                 "key": InputPrivacyKeyAbout(),
                 "rules": [InputPrivacyValueAllowAll()] if settings.privacy_bio else [InputPrivacyValueDisallowAll()]
@@ -581,13 +622,15 @@ class UserBot:
                 "rules": [InputPrivacyValueAllowAll()] if settings.privacy_groups else [InputPrivacyValueDisallowAll()]
             }, {
                 "key": InputPrivacyKeyForwards(),
-                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_replay_msgs else [InputPrivacyValueDisallowAll()]
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_replay_msgs else [
+                    InputPrivacyValueDisallowAll()]
             }, {
                 "key": InputPrivacyKeyPhoneCall(),
                 "rules": [InputPrivacyValueAllowAll()] if settings.privacy_calls else [InputPrivacyValueDisallowAll()]
             }, {
                 "key": InputPrivacyKeyVoiceMessages(),
-                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_voice_msgs else [InputPrivacyValueDisallowAll()]
+                "rules": [InputPrivacyValueAllowAll()] if settings.privacy_voice_msgs else [
+                    InputPrivacyValueDisallowAll()]
             },
         ]
         for field in fields:
@@ -599,3 +642,25 @@ class UserBot:
                 await asyncio.sleep(1)
             except Exception as e:
                 logging.error(f"{self.account_name} - {type(e)} - {e}")
+
+    @log_decorator
+    async def add_story(self, photo: str, caption: str):
+        result = await self._client(functions.stories.SendStoryRequest(
+            peer=self._tg_id,
+            media=types.InputMediaUploadedPhoto(
+                file=await self._client.upload_file(photo),
+            ),
+            privacy_rules=[types.InputPrivacyValueAllowAll()],
+            pinned=True,
+            noforwards=False,
+            caption=caption,
+            period=86400,
+        ))
+
+    async def _remove_channel_from_bl_after(self, channel_id: int, seconds: int):
+        await asyncio.sleep(seconds + random.randint(4, 10))
+        try:
+            self.blacklist.remove(channel_id)
+        except:
+            pass
+

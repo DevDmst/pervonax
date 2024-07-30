@@ -133,6 +133,22 @@ def run_pervonax(user_bots: list[UserBot]):
     logging.info("Написание комментариев активировано")
 
 
+async def publish_new_story(story_link: str, active_user_bots: list[UserBot]):
+    logging.info("Начинаю публиковать историю...")
+    first_user_bot = active_user_bots[0]
+    split = story_link.split("/")
+    story_id = split[-1]
+    user_id = split[-3]
+    story = await first_user_bot.get_story(int(story_id), user_id)
+    for ub in active_user_bots:
+        try:
+            await ub.publish_story(story)
+            logging.info(f"Аккаунт: {ub.account_name} - История опубликована успешно")
+        except Exception as e:
+            logging.error(f"Аккаунт: {ub.account_name} - Не удалось опубликовать историю")
+            logging.exception(e)
+
+
 async def main():
     logging.info("Аккаунты запускаются.. ожидайте..")
     await create_tables()
@@ -217,7 +233,8 @@ async def main():
                              "\n2. Отписаться от всего"
                              "\n3. Подписаться на каналы"
                              "\n4. Отписаться от всего и подписаться на каналы из channels.txt"
-                             "\n5. Первонах\n")
+                             "\n5. Опубликовать историю"
+                             "\n6. Первонах\n")
         if point == "1":
             await edit_all(active_user_bots)
             logging.info("Аккаунты завершили редактирование")
@@ -240,8 +257,14 @@ async def main():
             except Exception as e:
                 logging.exception(e)
             await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
-
         elif point == "5":
+            story_link = await ainput("Введите ссылку на историю: ")
+            if story_link:
+                await publish_new_story(story_link, active_user_bots)
+                logging.info("Аккаунты опубликовали историю")
+            else:
+                logging.info("Ошибка: неверная ссылка")
+        elif point == "6":
             if settings.timer_pervonax:
                 dt_or_number: str = await ainput("Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")
                 if utils.is_number(dt_or_number):  # кол-во часов

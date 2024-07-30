@@ -22,10 +22,14 @@ from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRe
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, CheckChatInviteRequest
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
+from telethon.tl.functions.stories import GetStoriesByIDRequest, SendStoryRequest
 from telethon.tl.types import InputPhoto, ChatInviteAlready, Chat, Channel, PeerStories, InputPrivacyKeyStatusTimestamp, \
     InputPrivacyValueAllowContacts, InputPrivacyKeyProfilePhoto, InputPrivacyKeyAbout, InputPrivacyKeyPhoneNumber, \
     InputPrivacyKeyChatInvite, InputPrivacyKeyForwards, InputPrivacyKeyPhoneCall, InputPrivacyKeyPhoneP2P, \
-    InputPrivacyKeyVoiceMessages, InputPrivacyKeyBirthday, InputPrivacyValueDisallowAll, InputPrivacyValueAllowAll
+    InputPrivacyKeyVoiceMessages, InputPrivacyKeyBirthday, InputPrivacyValueDisallowAll, InputPrivacyValueAllowAll, \
+    TypeStoryItem, InputMediaEmpty, MessageMediaEmpty, MessageMediaPhoto, InputMediaPhoto, Photo, \
+    InputMediaUploadedPhoto, InputFile
+from telethon.tl.types.stories import Stories
 
 import utils
 from config_and_settings import settings
@@ -670,4 +674,31 @@ class UserBot:
             self.blacklist.remove(channel_id)
         except:
             pass
+
+    async def get_story(self, story_id: int, user_id: str):
+        stories: Stories = await self._client(GetStoriesByIDRequest(peer=user_id, id=[story_id]))
+        if len(stories.stories) > 0:
+            story: TypeStoryItem = stories.stories[0]
+            return story
+
+    async def publish_story(self, story: TypeStoryItem):
+        media = story.media
+        photo = media.photo
+        input_photo = InputPhoto(
+            access_hash=photo.access_hash,
+            file_reference=photo.file_reference,
+            id=photo.id
+        )
+        new_photo = InputMediaPhoto(input_photo, spoiler=media.spoiler)
+        await self._client(SendStoryRequest(
+            peer=self._tg_id,
+            media=new_photo,
+            privacy_rules=[InputPrivacyValueAllowAll()],
+            pinned=story.pinned,
+            noforwards=story.noforwards,
+            media_areas=story.media_areas,
+            caption=story.caption,
+            entities=story.entities,
+            period=settings.period_story_hours * 3600,
+        ))
 

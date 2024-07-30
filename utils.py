@@ -63,7 +63,7 @@ def get_next(items: list, counter: list):
         counter[0] += 1
         return item
     else:
-        counter[0] = 0
+        counter[0] = 1
         return items[0]
 
 

@@ -142,6 +142,8 @@ class UserBot:
                     except:
                         pass
                     utils.move_file(self._session_path, self.bad_sessions_folder)
+                    utils.move_file(self._json_path, self.bad_sessions_folder)
+
                     logging.info(f"Account: {self.account_name} is banned")
                     break
 
@@ -524,6 +526,7 @@ class UserBot:
                 except:
                     pass
                 utils.move_file(self._session_path, self.bad_sessions_folder)
+                utils.move_file(self._json_path, self.bad_sessions_folder)
                 break
             except BadChatLink as e:
                 # нужно удалить этот чат из файла channels.txt

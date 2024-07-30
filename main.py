@@ -202,7 +202,9 @@ async def main():
                 acc.active = False
                 await user_bot.disconnect()
                 utils.move_file(tg_session["session"], user_bot.bad_sessions_folder)
-                utils.move_file(tg_session.get("json", None), user_bot.bad_sessions_folder)
+                json_path = tg_session.get("json", None)
+                if json_path:
+                    utils.move_file(json_path, user_bot.bad_sessions_folder)
                 logging.info(f"Account: {user_bot.account_name} is banned")
                 await db_session.commit()
 

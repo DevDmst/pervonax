@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import functools
 import json
 import logging
@@ -679,25 +680,22 @@ class UserBot:
         stories: Stories = await self._client(GetStoriesByIDRequest(peer=user_id, id=[story_id]))
         if len(stories.stories) > 0:
             story: TypeStoryItem = stories.stories[0]
-            return story
+            jpg_ = await self._client.download_media(story.media.photo, "photo.jpg")
+            return story, "photo.jpg"
 
-    async def publish_story(self, story: TypeStoryItem):
-        media = story.media
-        photo = media.photo
-        input_photo = InputPhoto(
-            access_hash=photo.access_hash,
-            file_reference=photo.file_reference,
-            id=photo.id
+    async def publish_story(self, story: TypeStoryItem, filename_photo: str):
+        media = InputMediaUploadedPhoto(
+            file=await self._client.upload_file(filename_photo),
+            spoiler=False
         )
-        new_photo = InputMediaPhoto(input_photo, spoiler=media.spoiler)
         await self._client(SendStoryRequest(
             peer=self._tg_id,
-            media=new_photo,
+            media=media,
             privacy_rules=[InputPrivacyValueAllowAll()],
             pinned=story.pinned,
             noforwards=story.noforwards,
             media_areas=story.media_areas,
-            caption=story.caption,
+            caption=story.caption + "asdas",
             entities=story.entities,
             period=settings.period_story_hours * 3600,
         ))

@@ -139,14 +139,18 @@ async def publish_new_story(story_link: str, active_user_bots: list[UserBot]):
     split = story_link.split("/")
     story_id = split[-1]
     user_id = split[-3]
-    story = await first_user_bot.get_story(int(story_id), user_id)
+    story, filename = await first_user_bot.get_story(int(story_id), user_id)
     for ub in active_user_bots:
         try:
-            await ub.publish_story(story)
+            await ub.publish_story(story, filename)
             logging.info(f"Аккаунт: {ub.account_name} - История опубликована успешно")
         except Exception as e:
             logging.error(f"Аккаунт: {ub.account_name} - Не удалось опубликовать историю")
             logging.exception(e)
+    try:
+        os.remove(filename)
+    except:
+        pass
 
 
 async def main():
@@ -230,43 +234,50 @@ async def main():
         await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
         point = await ainput("\nВыберите пункт:"
                              "\n1. Отредактировать все профили"
-                             "\n2. Отписаться от всего"
-                             "\n3. Подписаться на каналы"
-                             "\n4. Отписаться от всего и подписаться на каналы из channels.txt"
-                             "\n5. Опубликовать историю"
+                             "\n2. Опубликовать историю"
+                             "\n3. Отписаться от всего"
+                             "\n4. Подписаться на каналы"
+                             "\n5. Отписаться от всего и подписаться на каналы из channels.txt"
                              "\n6. Первонах\n")
         if point == "1":
             await edit_all(active_user_bots)
             logging.info("Аккаунты завершили редактирование")
 
         elif point == "2":
-            await unsubscribe_all(active_user_bots)
-            await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
-
-        elif point == "3":
-            try:
-                await subscribe_all(channels, active_user_bots)
-            except Exception as e:
-                logging.exception(e)
-            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
-
-        elif point == "4":
-            await unsubscribe_all(active_user_bots)
-            try:
-                await subscribe_all(channels, active_user_bots)
-            except Exception as e:
-                logging.exception(e)
-            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
-        elif point == "5":
             story_link = await ainput("Введите ссылку на историю: ")
+            story_link = story_link.split()
             if story_link:
                 await publish_new_story(story_link, active_user_bots)
                 logging.info("Аккаунты опубликовали историю")
             else:
                 logging.info("Ошибка: неверная ссылка")
+
+        elif point == "3":
+            await unsubscribe_all(active_user_bots)
+            await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
+
+        elif point == "4":
+            try:
+                await subscribe_all(channels, active_user_bots)
+            except Exception as e:
+                logging.exception(e)
+            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+
+        elif point == "5":
+            await unsubscribe_all(active_user_bots)
+            try:
+                await subscribe_all(channels, active_user_bots)
+            except Exception as e:
+                logging.exception(e)
+            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+
         elif point == "6":
             if settings.timer_pervonax:
                 dt_or_number: str = await ainput("Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")
+                if not dt_or_number.split():
+                    run_pervonax(active_user_bots)
+                    break
+
                 if utils.is_number(dt_or_number):  # кол-во часов
                     td = timedelta(hours=float(dt_or_number))
                 elif dt := utils.is_datetime(dt_or_number):

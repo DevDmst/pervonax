@@ -245,7 +245,7 @@ async def main():
 
         elif point == "2":
             story_link = await ainput("Введите ссылку на историю: ")
-            story_link = story_link.split()
+            story_link = story_link.strip()
             if story_link:
                 await publish_new_story(story_link, active_user_bots)
                 logging.info("Аккаунты опубликовали историю")

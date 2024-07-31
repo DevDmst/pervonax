@@ -293,7 +293,7 @@ async def main():
             run_pervonax(active_user_bots)
             break
         else:
-            raise ValueError("Неверный аргумент. Выберите один из пунктов")
+            logging.error("Неверный аргумент. Выберите один из пунктов")
 
 
 if __name__ == '__main__':

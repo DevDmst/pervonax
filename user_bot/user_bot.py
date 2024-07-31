@@ -526,7 +526,8 @@ class UserBot:
                 data = await self._subscribe(chat)
                 # обновляем время последней подписки только в том случае, если она была успешной
                 self._last_subscribe_datetime = datetime.utcnow()
-                await self.save_chat_call(self.db_acc_id, data[4], data[2])
+                if data:
+                    await self.save_chat_call(self.db_acc_id, data[4], data[2])
                 logging.info(f"Аккаунт {self.account_name} подписался на канал {chat}")
             except ConnectionError as e:  # если мы тут, значит аккаунт скорее всего в бане
                 logging.exception(e)

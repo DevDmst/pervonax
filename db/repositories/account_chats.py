@@ -13,28 +13,19 @@ class AccountsChatsRepo(SQLAlchemyRepository):
     model = AccountsChats
 
     @classmethod
-    async def set_ban(cls, acc_id: int, chat_id: int):
-        async with Session() as session:
-            stmt = select(cls.model).where(cls.model.chat_id == chat_id,
-                                           cls.model.account_id == acc_id)
-
-            item = await session.scalar(stmt)
-
-            if not item:
-                item = AccountsChats(account_id=acc_id, chat_id=chat_id, banned_date=datetime.utcnow(), banned=True)
-                session.add(item)
-            else:
-                stmt = (update(cls.model)
-                        .where(cls.model.chat_id == chat_id,
-                               cls.model.account_id == acc_id)
-                        .values(banned_date=datetime.utcnow(), banned=True))
-                await session.execute(stmt)
-
-            await session.commit()
+    async def set_ban(cls, acc_id: int, chat_id: int, session: AsyncSession):
+        stmt = (
+            update(cls.model)
+            .where(cls.model.chat_tg_id == chat_id,
+                   cls.model.account_id == acc_id)
+            .values(banned_date=datetime.utcnow(), banned=True)
+        )
+        await session.execute(stmt)
+        await session.commit()
 
     @classmethod
     async def get_quantity_by_account(cls, db_acc_id: int):
-        pass #TODO
+        pass  # TODO
 
     @classmethod
     async def is_subscribed(cls, db_acc_id: int, channel: str, session: AsyncSession):
@@ -45,3 +36,22 @@ class AccountsChatsRepo(SQLAlchemyRepository):
         result = await session.scalars(stmt)
         return result.all()
 
+    @classmethod
+    async def get_black_list(cls, acc_id: int, session: AsyncSession):
+        stmt = (
+            select(cls.model.chat_tg_id)
+            .where(cls.model.account_id == acc_id, cls.model.banned.is_(True))
+        )
+        result = await session.scalars(stmt)
+        return result.all()
+
+    @classmethod
+    async def set_tg_id(cls, acc_id: int, channel: str, channel_id: int, session: AsyncSession):
+        stmt = (
+            update(cls.model)
+            .where(cls.model.account_id == acc_id,
+                   cls.model.chat_link == channel)
+            .values(chat_tg_id=channel_id)
+        )
+        await session.execute(stmt)
+        await session.commit()

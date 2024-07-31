@@ -153,6 +153,16 @@ async def publish_new_story(story_link: str, active_user_bots: list[UserBot]):
         pass
 
 
+async def add_channel_to_black_list(acc_id: int, channel_id: int):
+    async with Session() as session:
+        await AccountsChatsRepo.set_ban(acc_id, channel_id, session)
+
+
+async def save_chat_call(acc_id: int, channel: str, channel_id: int):
+    async with Session() as session:
+        await AccountsChatsRepo.set_tg_id(acc_id, channel, channel_id, session)
+
+
 async def main():
     logging.info("Аккаунты запускаются.. ожидайте..")
     await create_tables()
@@ -207,7 +217,9 @@ async def main():
                 api_id=config.api_id,
                 api_hash=config.api_hash,
                 proxy=proxy,
-                rm_chat=rm_chat
+                rm_chat=rm_chat,
+                new_ch_blacklist_call=add_channel_to_black_list,
+                save_chat_call=save_chat_call,
             )
             me = await user_bot.start()
             if me:
@@ -216,6 +228,7 @@ async def main():
                 acc.active = True
                 acc.tg_id = me.id
                 await db_session.commit()
+                user_bot.blacklist = set(await AccountsChatsRepo.get_black_list(user_bot.db_acc_id, db_session))
                 user_bot.tg_id = me.id
             else:
                 logging.info(f"Не удалось запустить сессию {name}, перемещаю в bad_sessions")
@@ -273,7 +286,8 @@ async def main():
 
         elif point == "6":
             if settings.timer_pervonax:
-                dt_or_number: str = await ainput("Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")
+                dt_or_number: str = await ainput(
+                    "Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")
                 if not dt_or_number.split():
                     run_pervonax(active_user_bots)
                     break

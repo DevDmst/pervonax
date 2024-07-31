@@ -74,6 +74,8 @@ class UserBot:
                  session_path: str,
                  json_path: str | None,
                  rm_chat: Callable,
+                 new_ch_blacklist_call: Callable,
+                 save_chat_call: Callable,
                  api_id: str = None,
                  api_hash: str = None,
                  proxy: dict | None = None,
@@ -115,11 +117,13 @@ class UserBot:
 
         self._counter_messages = 0
         self.blacklist = set()
+        self.new_ch_blacklist_call = new_ch_blacklist_call
+
+        self.save_chat_call = save_chat_call
 
         self.is_writing_comments_enabled = False
         self.process_subscribe_pending = False
 
-    @log_decorator
     async def start(self):
         try:
             await self._client.connect()
@@ -253,10 +257,7 @@ class UserBot:
                 logging.info(f"FloodWaitError - function: edit_username - delay: {e.seconds}")
                 await asyncio.sleep(e.seconds)
 
-    @log_decorator
     async def _write_comment(self, event):
-        await asyncio.sleep(random.randint(*self._delay_before_comment))
-
         count_lbb = 0
         time_out_counter = 0
         first_try = True
@@ -301,6 +302,7 @@ class UserBot:
                     f' и у вас нет прав на доступ к нему. Другая причина может заключаться в том, что вас забанили. '
                     f'Добавлен в чс')
                 self.blacklist.add(event.message.peer_id.channel_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
                 break
 
             except ChatGuestSendForbiddenError as e:
@@ -329,6 +331,7 @@ class UserBot:
                     f'{self.account_name} | Вам запрещено отправлять сообщения в супергруппах/каналах. '
                     f'Группа канала id{event.message.peer_id.channel_id} - публичная! Добавлен в чс')
                 self.blacklist.add(event.message.peer_id.channel_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
                 break
 
             except (ValueError, ChatWriteForbiddenError):
@@ -337,6 +340,7 @@ class UserBot:
                     f'{self.account_name} | Запрещено писать! Вы больше не можете оставлять комментарии в группе канала '
                     f'id{event.message.peer_id.channel_id}. Добавлен в чс')
                 self.blacklist.add(event.message.peer_id.channel_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
                 break
 
             except LinkBioBan:
@@ -352,6 +356,7 @@ class UserBot:
                 logging.error(msg)
                 # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 self.blacklist.add(event.message.peer_id.channel_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
                 break
 
             except Exception as e:
@@ -360,9 +365,9 @@ class UserBot:
                 logging.error(f'{self.account_name} | {traceback.format_exc()}')
                 # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 self.blacklist.add(event.message.peer_id.channel_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
                 raise e
 
-    @log_decorator
     async def _subscribe(self, chat_link: str):
         try:
             response = await self._send_subscribe_request(chat_link)
@@ -521,6 +526,8 @@ class UserBot:
                 data = await self._subscribe(chat)
                 # обновляем время последней подписки только в том случае, если она была успешной
                 self._last_subscribe_datetime = datetime.utcnow()
+                await self.save_chat_call(self.db_acc_id, data[4], data[2])
+                logging.info(f"Аккаунт {self.account_name} подписался на канал {chat}")
             except ConnectionError as e:  # если мы тут, значит аккаунт скорее всего в бане
                 logging.exception(e)
                 await self._notifier.notify(
@@ -554,7 +561,11 @@ class UserBot:
             event = await self._comment_queue.get()
 
             try:
-                await self._write_comment(event)
+                chat_id = event.message.peer_id.channel_id
+                if chat_id not in self.blacklist:
+                    await asyncio.sleep(random.randint(*self._delay_before_comment))
+                    await self._write_comment(event)
+
             except Exception as e:
                 msg = f"{self.account_name} - {type(e)} - {str(e)}"
                 logging.error(msg)

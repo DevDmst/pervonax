@@ -143,6 +143,7 @@ class UserBot:
             if not self._client.is_connected():
                 try:
                     await self._client.connect()
+                    await self._client.get_me()
                 except Exception as e:
                     await self._notifier.notify(
                         self._admin_id,
@@ -334,6 +335,10 @@ class UserBot:
                     f'Группа канала id{event.message.peer_id.channel_id} - публичная! Добавлен в чс')
                 self.blacklist.add(event.message.peer_id.channel_id)
                 await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
+                break
+
+            except UserDeactivatedBanError as e:
+                logging.info(f"{self.account_name} | Невозможно отправить комментарий (UserDeactivatedBanError)")
                 break
 
             except (ValueError, ChatWriteForbiddenError):

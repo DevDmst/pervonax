@@ -252,7 +252,7 @@ async def main():
         await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
         point = await ainput("\nВыберите пункт:"
                              "\n1. Отредактировать все профили"
-                             "\n2. Узнать траты за текущий месяц"
+                             # "\n2. Узнать траты за текущий месяц"
                              "\n3. Опубликовать историю"
                              "\n4. Отписаться от всего"
                              "\n5. Подписаться на каналы"
@@ -262,13 +262,13 @@ async def main():
             await edit_all(active_user_bots)
             logging.info("Аккаунты завершили редактирование")
 
-        elif point == "2":
-            total_prompt_tokens, total_completion_tokens = await OpenAIRequestsRepo.get_sum_tokens()
-            cost_promt = total_prompt_tokens / 1000 * settings.promt_token_price_1k
-            cost_completion = total_completion_tokens / 1000 * settings.completion_token_price_1k
-            print(f"Траты за этот месяц: {cost_completion + cost_promt}$")
+        # elif point == "2":
+        #     total_prompt_tokens, total_completion_tokens = await OpenAIRequestsRepo.get_sum_tokens()
+        #     cost_promt = total_prompt_tokens / 1000 * settings.promt_token_price_1k
+        #     cost_completion = total_completion_tokens / 1000 * settings.completion_token_price_1k
+        #     print(f"Траты за этот месяц: {cost_completion + cost_promt}$")
 
-        elif point == "3":
+        elif point == "2":
             story_link = await ainput("Введите ссылку на историю: ")
             story_link = story_link.strip()
             if story_link:
@@ -277,11 +277,19 @@ async def main():
             else:
                 logging.info("Ошибка: неверная ссылка")
 
-        elif point == "4":
+        elif point == "3":
             await unsubscribe_all(active_user_bots)
             await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
 
+        elif point == "4":
+            try:
+                await subscribe_all(channels, active_user_bots)
+            except Exception as e:
+                logging.exception(e)
+            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+
         elif point == "5":
+            await unsubscribe_all(active_user_bots)
             try:
                 await subscribe_all(channels, active_user_bots)
             except Exception as e:
@@ -289,14 +297,6 @@ async def main():
             await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
 
         elif point == "6":
-            await unsubscribe_all(active_user_bots)
-            try:
-                await subscribe_all(channels, active_user_bots)
-            except Exception as e:
-                logging.exception(e)
-            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
-
-        elif point == "7":
             if settings.timer_pervonax:
                 dt_or_number: str = await ainput(
                     "Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")

@@ -11,7 +11,7 @@ from asyncio import Task
 from datetime import datetime, timedelta
 from typing import Callable
 
-from openai import APIConnectionError
+from openai import APIConnectionError, AuthenticationError, RateLimitError
 from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
     UsernameOccupiedError, UsernameNotModifiedError, FloodWaitError, InviteRequestSentError, \
@@ -300,7 +300,6 @@ class UserBot:
                 await asyncio.sleep(e.seconds + 20)
 
             except ChannelPrivateError:
-                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
                 logging.info(
                     f'{self.account_name} | Указанный канал id{event.message.peer_id.channel_id} является частным,'
                     f' и у вас нет прав на доступ к нему. Другая причина может заключаться в том, что вас забанили. '
@@ -314,8 +313,7 @@ class UserBot:
                     logging.info(
                         f"{self.account_name} - ChatGuestSendForbiddenError - не удалось отправить комментарий")
                     break
-                await self.subscribe_queue.put(event.replies.channel_id)
-                await asyncio.sleep(10)
+                await self._subscribe(event.replies.channel_id)
                 first_try = False
 
             except MsgIdInvalidError as e:
@@ -572,7 +570,7 @@ class UserBot:
                     await asyncio.sleep(random.randint(*self._delay_before_comment))
                     message = await self._write_comment(event)
                     if settings.need_edit_comment:
-                        self._schedule_edit_comment(message, chat_id)
+                        self._schedule_edit_comment(copy.copy(message), chat_id)
             except Exception as e:
                 msg = f"{self.account_name} - {type(e)} - {str(e)}"
                 logging.error(msg)
@@ -727,6 +725,14 @@ class UserBot:
                 msg = ("Не удалось сгенерировать комментарий из-за сетевой ошибки. "
                        "Возможно, прокси не фурычат.")
                 await self._notifier.notify(self._admin_id, msg)
+
+            except AuthenticationError as e:
+                await self._notifier.notify(self._admin_id, "Неверный токен openai")
+
+            except RateLimitError as e:
+                if e.code == 429 and e.message.startswith("You exceeded your current quota"):
+                    await self._notifier.notify(self._admin_id, "Закончился баланс ChatGPT")
+
             except Exception as e:
                 msg = f"Ошибка {type(e)} при попытке получить комментарий (запись в логе есть)"
                 await self._notifier.notify(self._admin_id, msg)
@@ -745,12 +751,87 @@ class UserBot:
 
         text = self._message_generator.generate_random_msg()
 
-        try:
-            await self._client.edit_message(message.peer_id, message, text)
+        count_lbb = 0
+        time_out_counter = 0
+        while True:
+            try:
+                result = await self._client.edit_message(message.peer_id, message, text)
 
-        # except ChatAdminRequiredError as e:
+                if result is None:
+                    count_lbb += 1
+                    raise LinkBioBan
 
+                logging.info(f'{self.account_name} успешно отредактировал комментарий')
+                return result
 
-        except Exception as e:
-            logging.error(f"Ошибка при редактировании комментария - {type(e)}")
-            logging.exception(e)
+            except ConnectionError as e:
+                raise e
+
+            except TimeoutError:
+                await asyncio.sleep(5)
+                time_out_counter += 1
+                if time_out_counter > 4:
+                    await self._notifier.notify(
+                        self._admin_id,
+                        f'{self.account_name} | Ошибка TimeoutError после 5-и попыток отредактировать комментарий')
+                    break
+
+            except FloodWaitError as e:
+                logging.warning(f'{self.account_name} | FloodWaitError, ожидание {e.seconds + 20} секунд')
+                await asyncio.sleep(e.seconds + 20)
+
+            except ChannelPrivateError:
+                logging.info(
+                    f'{self.account_name} | Указанный канал id{message.peer_id.channel_id} является частным,'
+                    f' и у вас нет прав на доступ к нему. Другая причина может заключаться в том, что вас забанили. '
+                    f'Добавлен в чс')
+                self.blacklist.add(chat_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
+                break
+
+            except MsgIdInvalidError as e:
+                # возможно сообщение было удалено, комментарий невозможен
+                break
+
+            except UserBannedInChannelError:
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                logging.info(
+                    f'{self.account_name} | Вам запрещено отправлять сообщения в супергруппах/каналах. '
+                    f'Группа канала id{chat_id} - публичная! Добавлен в чс')
+                self.blacklist.add(chat_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
+                break
+
+            except (ValueError, ChatWriteForbiddenError):
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                logging.info(
+                    f'{self.account_name} | Запрещено писать! Вы больше не можете оставлять комментарии в группе канала '
+                    f'id{chat_id}. Добавлен в чс')
+                self.blacklist.add(chat_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
+                break
+
+            except LinkBioBan:
+                if count_lbb > 10:
+                    await self._client.disconnect()
+                    msg = f"Клиент {self.account_name} был отключён, причина: LinkBioBan"
+                    logging.info(msg)
+                    await self._notifier.notify(self._admin_id, msg)
+                    break
+
+            except ForbiddenError as e:
+                msg = f'{self.account_name} | Действия в канале id {message.peer_id.channel_id} ограничены админами'
+                logging.error(msg)
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                self.blacklist.add(chat_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
+                break
+
+            except Exception as e:
+                msg = f'{self.account_name} | Действия в канале id {chat_id} ограничены админами. Добавлен в чс'
+                logging.error(msg)
+                logging.error(f'{self.account_name} | {traceback.format_exc()}')
+                # await AccountsChatsRepo.set_ban(self.db_acc_id, chat_id=chat_id)
+                self.blacklist.add(chat_id)
+                await self.new_ch_blacklist_call(self.db_acc_id, chat_id)
+                raise e

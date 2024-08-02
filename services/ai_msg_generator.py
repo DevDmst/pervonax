@@ -63,8 +63,6 @@ class AIMsgGenerator:
                 await OpenAIRequestsRepo.add_request(data)
                 response = message.content
                 break
-            except APIConnectionError as e:
-                raise e
             except Exception as e:
                 logging.info(f"Не удалось сгенерировать AI коммент")
                 logging.exception(e)

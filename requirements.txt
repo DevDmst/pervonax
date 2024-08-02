@@ -8,3 +8,4 @@ openai
 sqlalchemy
 aioconsole
 cryptg
+httpx-socks

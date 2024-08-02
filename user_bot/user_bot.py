@@ -11,6 +11,7 @@ from asyncio import Task
 from datetime import datetime, timedelta
 from typing import Callable
 
+from openai import APIConnectionError
 from telethon import TelegramClient, events, functions
 from telethon.errors import AuthKeyDuplicatedError, UnauthorizedError, AuthKeyNotFound, UsernameInvalidError, \
     UsernameOccupiedError, UsernameNotModifiedError, FloodWaitError, InviteRequestSentError, \
@@ -76,6 +77,7 @@ class UserBot:
                  rm_chat: Callable,
                  new_ch_blacklist_call: Callable,
                  save_chat_call: Callable,
+                 use_ai_for_generate_message: bool = False,
                  api_id: str = None,
                  api_hash: str = None,
                  proxy: dict | None = None,
@@ -95,6 +97,7 @@ class UserBot:
         self._delay_between_comments = delay_between_comments
         self._admin_id = admin_id
         self.account_name = account_name
+        self._use_ai_for_generate_message = use_ai_for_generate_message
 
         self._client = TelegramClient(
             session=session_path,
@@ -261,10 +264,11 @@ class UserBot:
         count_lbb = 0
         time_out_counter = 0
         first_try = True
+        post_text = event.message.raw_text.strip()
         while True:
             chat_id = event.message.peer_id.channel_id
             try:
-                message = self._message_generator.generate_random_msg()
+                message = await self._generate_comment(post_text)
                 result = await self._client.send_message(
                     entity=event.message.peer_id.channel_id,
                     message=message,
@@ -379,6 +383,7 @@ class UserBot:
                 elif isinstance(chat, Chat):
                     username = chat.username if hasattr(chat, "username") else None
                     return "chat", chat.title, chat.id, username, chat_link
+                raise ChatGuestSendForbiddenError
 
         except InviteRequestSentError as e:
             await asyncio.sleep(10)
@@ -712,3 +717,14 @@ class UserBot:
             period=settings.period_story_hours * 3600,
         ))
 
+    async def _generate_comment(self, text: str):
+        if self._use_ai_for_generate_message and text:
+            try:
+                return await self._message_generator.generate_ai_response(text, self.db_acc_id)
+            except APIConnectionError as e:
+                logging.exception(e)
+                msg = "Не удалось сгенерировать комментарий из-за сетевой ошибки. Возможно, прокси не фурычат."
+                await self._notifier.notify(self._admin_id, msg)
+                return self._message_generator.generate_random_msg()
+        else:
+            return self._message_generator.generate_random_msg()

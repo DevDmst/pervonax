@@ -5,10 +5,6 @@ from dataclasses import dataclass
 class Settings:
     use_proxy: bool
     type_proxy: str
-    gpt_model: str
-    use_gpt: bool
-    need_edit_comment: bool
-    delay_before_edit: list[int]
     delay_between_subscriptions: list[int]
     delay_before_comment: list[int]
     delay_between_comments: list[int]
@@ -39,3 +35,9 @@ class Settings:
     timer_pervonax: bool
 
     period_story_hours: int
+    promts: list[str]
+
+    use_ai_for_generate_message: bool
+
+    promt_token_price_1k: int
+    completion_token_price_1k: int

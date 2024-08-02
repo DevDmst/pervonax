@@ -7,3 +7,4 @@ class Config:
     api_hash: str
     bot_token: str
     admin_id: int
+    openai_token: str

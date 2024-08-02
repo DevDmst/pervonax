@@ -12,6 +12,7 @@ from db import Session
 from db.repositories import AccountsChatsRepo
 from db.repositories.accounts import TelegramAccountsRepo
 from db.repositories.chats import ChatsRepo
+from db.repositories.openai_requests import OpenAIRequestsRepo
 from db.repositories.proxies import ProxiesRepo
 from db.utils.utils import create_tables
 from services.message_generator import MessageGenerator
@@ -174,7 +175,10 @@ async def main():
     active_user_bots = []
     accounts = []
 
-    message_generator = MessageGenerator(DATA_MAILING_TXT)
+    message_generator = MessageGenerator(DATA_MAILING_TXT,
+                                         config.openai_token,
+                                         settings.promts,
+                                         proxies[0])
     notifier = Notifier(config.bot_token)
 
     def rm_chat(chat_link: str):
@@ -220,6 +224,7 @@ async def main():
                 rm_chat=rm_chat,
                 new_ch_blacklist_call=add_channel_to_black_list,
                 save_chat_call=save_chat_call,
+                use_ai_for_generate_message=settings.use_ai_for_generate_message,
             )
             me = await user_bot.start()
             if me:
@@ -247,16 +252,23 @@ async def main():
         await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
         point = await ainput("\nВыберите пункт:"
                              "\n1. Отредактировать все профили"
-                             "\n2. Опубликовать историю"
-                             "\n3. Отписаться от всего"
-                             "\n4. Подписаться на каналы"
-                             "\n5. Отписаться от всего и подписаться на каналы из channels.txt"
-                             "\n6. Первонах\n")
+                             "\n2. Узнать траты за текущий месяц"
+                             "\n3. Опубликовать историю"
+                             "\n4. Отписаться от всего"
+                             "\n5. Подписаться на каналы"
+                             "\n6. Отписаться от всего и подписаться на каналы из channels.txt"
+                             "\n7. Первонах\n")
         if point == "1":
             await edit_all(active_user_bots)
             logging.info("Аккаунты завершили редактирование")
 
         elif point == "2":
+            total_prompt_tokens, total_completion_tokens = await OpenAIRequestsRepo.get_sum_tokens()
+            cost_promt = total_prompt_tokens / 1000 * settings.promt_token_price_1k
+            cost_completion = total_completion_tokens / 1000 * settings.completion_token_price_1k
+            print(f"Траты за этот месяц: {cost_completion + cost_promt}$")
+
+        elif point == "3":
             story_link = await ainput("Введите ссылку на историю: ")
             story_link = story_link.strip()
             if story_link:
@@ -265,19 +277,11 @@ async def main():
             else:
                 logging.info("Ошибка: неверная ссылка")
 
-        elif point == "3":
+        elif point == "4":
             await unsubscribe_all(active_user_bots)
             await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
 
-        elif point == "4":
-            try:
-                await subscribe_all(channels, active_user_bots)
-            except Exception as e:
-                logging.exception(e)
-            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
-
         elif point == "5":
-            await unsubscribe_all(active_user_bots)
             try:
                 await subscribe_all(channels, active_user_bots)
             except Exception as e:
@@ -285,6 +289,14 @@ async def main():
             await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
 
         elif point == "6":
+            await unsubscribe_all(active_user_bots)
+            try:
+                await subscribe_all(channels, active_user_bots)
+            except Exception as e:
+                logging.exception(e)
+            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+
+        elif point == "7":
             if settings.timer_pervonax:
                 dt_or_number: str = await ainput(
                     "Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")

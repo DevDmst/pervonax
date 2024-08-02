@@ -30,7 +30,7 @@ from telethon.tl.types import InputPhoto, ChatInviteAlready, Chat, Channel, Peer
     InputPrivacyKeyChatInvite, InputPrivacyKeyForwards, InputPrivacyKeyPhoneCall, InputPrivacyKeyPhoneP2P, \
     InputPrivacyKeyVoiceMessages, InputPrivacyKeyBirthday, InputPrivacyValueDisallowAll, InputPrivacyValueAllowAll, \
     TypeStoryItem, InputMediaEmpty, MessageMediaEmpty, MessageMediaPhoto, InputMediaPhoto, Photo, \
-    InputMediaUploadedPhoto, InputFile
+    InputMediaUploadedPhoto, InputFile, Message
 from telethon.tl.types.stories import Stories
 
 import utils
@@ -272,7 +272,7 @@ class UserBot:
                 result = await self._client.send_message(
                     entity=event.message.peer_id.channel_id,
                     message=message,
-                    comment_to=event.message.id)
+                    comment_to=event.message)
 
                 if result is None:
                     count_lbb += 1
@@ -281,7 +281,7 @@ class UserBot:
                 logging.info(f'{self.account_name} | Сообщение №{UserBot.counter_messages} - message({message}) '
                              f'отправлено в комментарий канала: id{event.message.peer_id.channel_id}')
                 UserBot.counter_messages += 1
-                break
+                return result
 
             except ConnectionError as e:
                 raise e
@@ -570,8 +570,9 @@ class UserBot:
                 chat_id = event.message.peer_id.channel_id
                 if chat_id not in self.blacklist:
                     await asyncio.sleep(random.randint(*self._delay_before_comment))
-                    await self._write_comment(event)
-
+                    message = await self._write_comment(event)
+                    if settings.need_edit_comment:
+                        self._schedule_edit_comment(message, chat_id)
             except Exception as e:
                 msg = f"{self.account_name} - {type(e)} - {str(e)}"
                 logging.error(msg)
@@ -723,7 +724,8 @@ class UserBot:
                 return await self._message_generator.generate_ai_response(text, self.db_acc_id)
             except APIConnectionError as e:
                 logging.exception(e)
-                msg = "Не удалось сгенерировать комментарий из-за сетевой ошибки. Возможно, прокси не фурычат."
+                msg = ("Не удалось сгенерировать комментарий из-за сетевой ошибки. "
+                       "Возможно, прокси не фурычат.")
                 await self._notifier.notify(self._admin_id, msg)
             except Exception as e:
                 msg = f"Ошибка {type(e)} при попытке получить комментарий (запись в логе есть)"
@@ -732,3 +734,23 @@ class UserBot:
             return self._message_generator.generate_random_msg()
         else:
             return self._message_generator.generate_random_msg()
+
+    def _schedule_edit_comment(self, message: Message, chat_id: int):
+        asyncio.create_task(self._edit_comment(message, chat_id))
+
+    async def _edit_comment(self, message: Message, chat_id: int):
+        await asyncio.sleep(settings.delay_before_edit)
+        if chat_id in self.blacklist:
+            return
+
+        text = self._message_generator.generate_random_msg()
+
+        try:
+            await self._client.edit_message(message.peer_id, message, text)
+
+        # except ChatAdminRequiredError as e:
+
+
+        except Exception as e:
+            logging.error(f"Ошибка при редактировании комментария - {type(e)}")
+            logging.exception(e)

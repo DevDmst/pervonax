@@ -5,6 +5,8 @@ from dataclasses import dataclass
 class Settings:
     use_proxy: bool
     type_proxy: str
+    need_edit_comment: bool
+    delay_before_edit: int
     delay_between_subscriptions: list[int]
     delay_before_comment: list[int]
     delay_between_comments: list[int]

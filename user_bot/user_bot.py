@@ -725,6 +725,10 @@ class UserBot:
                 logging.exception(e)
                 msg = "Не удалось сгенерировать комментарий из-за сетевой ошибки. Возможно, прокси не фурычат."
                 await self._notifier.notify(self._admin_id, msg)
-                return self._message_generator.generate_random_msg()
+            except Exception as e:
+                msg = f"Ошибка {type(e)} при попытке получить комментарий (запись в логе есть)"
+                await self._notifier.notify(self._admin_id, msg)
+
+            return self._message_generator.generate_random_msg()
         else:
             return self._message_generator.generate_random_msg()

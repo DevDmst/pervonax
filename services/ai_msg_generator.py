@@ -75,6 +75,7 @@ class AIMsgGenerator:
                     "created_dt": datetime.utcnow()
                 }
                 await OpenAIRequestsRepo.add_request(data)
+                raise e
         return response
 
     def count_tokens(self, text: str, role: str = "user"):

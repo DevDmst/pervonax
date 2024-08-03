@@ -14,6 +14,7 @@ from db.repositories.accounts import TelegramAccountsRepo
 from db.repositories.chats import ChatsRepo
 from db.repositories.openai_requests import OpenAIRequestsRepo
 from db.repositories.proxies import ProxiesRepo
+from db.repositories.subscribe_counter import SubscribeCountersRepo
 from db.utils.utils import create_tables
 from services.message_generator import MessageGenerator
 from services.notifier import Notifier
@@ -164,6 +165,16 @@ async def save_chat_call(acc_id: int, channel: str, channel_id: int):
         await AccountsChatsRepo.set_tg_id(acc_id, channel, channel_id, session)
 
 
+def check_point(point: str, menu: list):
+    try:
+        i = int(point)
+        i -= 1
+        item = menu[i]
+        return True
+    except:
+        return False
+
+
 async def main():
     logging.info("Аккаунты запускаются.. ожидайте..")
     await create_tables()
@@ -185,7 +196,7 @@ async def main():
         channels.remove(chat_link)
         utils.save_file(PATH_TO_CHANNELS_FILE, channels)
 
-    async with Session() as db_session:
+    async with (Session() as db_session):
         # добавляем прокси в бд
         for proxy in proxies:
             if not await ProxiesRepo.exist(proxy, db_session):
@@ -248,77 +259,123 @@ async def main():
                 logging.info(f"Account: {user_bot.account_name} is banned")
                 await db_session.commit()
 
-    while True:
-        await asyncio.sleep(0.1)  # для того, чтобы текст в консоли успел отобразиться
-        point = await ainput("\nВыберите пункт:"
-                             "\n1. Отредактировать все профили"
-                             "\n2. Опубликовать историю"
-                             "\n3. Отписаться от всего"
-                             "\n4. Подписаться на каналы"
-                             "\n5. Отписаться от всего и подписаться на каналы из channels.txt"
-                             "\n6. Первонах\n")
-        if point == "1":
-            await edit_all(active_user_bots)
-            logging.info("Аккаунты завершили редактирование")
+        counter_subscribe_obj = await SubscribeCountersRepo.get_one(1, db_session)
+        if not counter_subscribe_obj:
+            await SubscribeCountersRepo.add_one({"id": 1, "number": 0}, db_session)
+            counter_subscribe = 0
+        else:
+            counter_subscribe = counter_subscribe_obj.number
 
-        # elif point == "2":
-        #     total_prompt_tokens, total_completion_tokens = await OpenAIRequestsRepo.get_sum_tokens()
-        #     cost_promt = total_prompt_tokens / 1000 * settings.promt_token_price_1k
-        #     cost_completion = total_completion_tokens / 1000 * settings.completion_token_price_1k
-        #     print(f"Траты за этот месяц: {cost_completion + cost_promt}$")
+    menu = [
+        ("Отредактировать все профили", "1"),
+        ("Опубликовать историю", "2"),
+        ("Отписаться от всего", "3"),
+        ("Подписаться на каналы (доступно: {} р.)", "4"),
+        ("Отписаться от всего и подписаться на каналы из channels.txt", "5"),
+        ("Первонах", "6"),
+    ]
+    available_count_of_subscribes = len(active_user_bots) - counter_subscribe
+    while True:
+        point = await ainput(generate_menu(menu, available_count_of_subscribes))
+        if not check_point(point, menu):
+            logging.error("Неверный аргумент. Выберите один из пунктов")
+            await asyncio.sleep(1)
+            continue
+
+        point = menu[int(point)-1][1]
+        if point == "1":
+            await method_edit_all(active_user_bots)
 
         elif point == "2":
-            story_link = await ainput("Введите ссылку на историю: ")
-            story_link = story_link.strip()
-            if story_link:
-                await publish_new_story(story_link, active_user_bots)
-                logging.info("Аккаунты опубликовали историю")
-            else:
-                logging.info("Ошибка: неверная ссылка")
+            await method_publish_story(active_user_bots)
 
         elif point == "3":
-            await unsubscribe_all(active_user_bots)
-            await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
+            await method_unsubscribe_all(active_user_bots, notifier)
 
         elif point == "4":
-            try:
-                await subscribe_all(channels, active_user_bots)
-            except Exception as e:
-                logging.exception(e)
-            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+            await method_subscribe_all(active_user_bots, channels, notifier)
 
         elif point == "5":
-            await unsubscribe_all(active_user_bots)
-            try:
-                await subscribe_all(channels, active_user_bots)
-            except Exception as e:
-                logging.exception(e)
-            await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+            await method_unsubscribe_and_subscribe_all(active_user_bots, channels, notifier)
 
         elif point == "6":
-            if settings.timer_pervonax:
-                dt_or_number: str = await ainput(
-                    "Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")
-                if not dt_or_number.split():
-                    run_pervonax(active_user_bots)
-                    break
-
-                if utils.is_number(dt_or_number):  # кол-во часов
-                    td = timedelta(hours=float(dt_or_number))
-                elif dt := utils.is_datetime(dt_or_number):
-                    if dt <= datetime.utcnow():
-                        print("Дата должна быть больше текущего момента\n")
-                        continue
-                    td = dt - datetime.utcnow()
-                else:
-                    print("Ошибка формата\n")
-                    continue
-                print(f"Запущу первонах через {str(td)}\n")
-                await asyncio.sleep(td.total_seconds())
-            run_pervonax(active_user_bots)
+            await method_run_pervonax(active_user_bots)
             break
+
+
+
+async def method_unsubscribe_and_subscribe_all(active_user_bots, channels, notifier):
+    await unsubscribe_all(active_user_bots)
+    await method_subscribe_all(active_user_bots, channels, notifier)
+
+
+async def method_subscribe_all(active_user_bots, channels, notifier):
+    try:
+        await SubscribeCountersRepo.add_one_number()
+        await subscribe_all(channels, active_user_bots)
+    except Exception as e:
+        logging.exception(e)
+    await notifier.notify(config.admin_id, "Аккаунты завершили подписку")
+
+
+async def method_unsubscribe_all(active_user_bots, notifier):
+    await unsubscribe_all(active_user_bots)
+    await notifier.notify(config.admin_id, "Аккаунты завершили отписку")
+
+
+async def method_publish_story(active_user_bots):
+    story_link = await ainput("Введите ссылку на историю: ")
+    story_link = story_link.strip()
+    if story_link:
+        await publish_new_story(story_link, active_user_bots)
+        logging.info("Аккаунты опубликовали историю")
+    else:
+        logging.info("Ошибка: неверная ссылка")
+
+
+async def price_tokens():
+    total_prompt_tokens, total_completion_tokens = await OpenAIRequestsRepo.get_sum_tokens()
+    cost_promt = total_prompt_tokens / 1000 * settings.promt_token_price_1k
+    cost_completion = total_completion_tokens / 1000 * settings.completion_token_price_1k
+    print(f"Траты за этот месяц: {cost_completion + cost_promt}$")
+
+
+async def method_edit_all(active_user_bots):
+    await edit_all(active_user_bots)
+    logging.info("Аккаунты завершили редактирование")
+
+
+async def method_run_pervonax(active_user_bots):
+    if settings.timer_pervonax:
+        dt_or_number: str = await ainput(
+            "Введите дату запуска (H:M d.m.Y) или кол-во часов от текущего момента\n")
+        if not dt_or_number.split():
+            run_pervonax(active_user_bots)
+            return
+
+        if utils.is_number(dt_or_number):  # кол-во часов
+            td = timedelta(hours=float(dt_or_number))
+        elif dt := utils.is_datetime(dt_or_number):
+            if dt <= datetime.utcnow():
+                print("Дата должна быть больше текущего момента\n")
+                return
+            td = dt - datetime.utcnow()
         else:
-            logging.error("Неверный аргумент. Выберите один из пунктов")
+            print("Ошибка формата\n")
+            return
+        print(f"Запущу первонах через {str(td)}\n")
+        await asyncio.sleep(td.total_seconds())
+    run_pervonax(active_user_bots)
+
+
+def generate_menu(menu: list[tuple], available_count_of_subscribes: int):
+    points = []
+    for i, point in enumerate(menu):
+        p = point[0]
+        if point[1] == "4":  # подписка
+            p = p.format(available_count_of_subscribes)
+        points.append(f"{i + 1}. {p}")
+    return "\nВыберите пункт:\n" + "\n".join(points) + "\n"
 
 
 if __name__ == '__main__':

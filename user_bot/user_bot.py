@@ -266,10 +266,10 @@ class UserBot:
         time_out_counter = 0
         first_try = True
         post_text = event.message.raw_text.strip()
+        message = await self._generate_comment(post_text)
         while True:
             chat_id = event.message.peer_id.channel_id
             try:
-                message = await self._generate_comment(post_text)
                 result = await self._client.send_message(
                     entity=event.message.peer_id.channel_id,
                     message=message,
@@ -351,6 +351,7 @@ class UserBot:
                 break
 
             except LinkBioBan:
+                await asyncio.sleep(10)
                 if count_lbb > 10:
                     await self._client.disconnect()
                     msg = f"Клиент {self.account_name} был отключён, причина: LinkBioBan"

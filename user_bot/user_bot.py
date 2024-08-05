@@ -449,6 +449,7 @@ class UserBot:
                 elif isinstance(chat, Chat):
                     username = chat.username if hasattr(chat, "username") else None
                     return "chat", chat.title, chat.id, username, invite_link
+                return None
         except:
             return None
         return None
@@ -457,9 +458,14 @@ class UserBot:
         if self.is_inviting_link(link):
             data = await self._get_chat_info_by_invite_link(link)
             return data
-        entity = await self._client.get_entity(link)
-        username = entity.username if hasattr(entity, "username") else None
-        return entity.title, entity.id, username, link
+        chat = await self._client.get_entity(link)
+        if isinstance(chat, Channel):
+            username = chat.username if hasattr(chat, "username") else None
+            return "channel", chat.title, chat.id, username, link
+        elif isinstance(chat, Chat):
+            username = chat.username if hasattr(chat, "username") else None
+            return "chat", chat.title, chat.id, username, link
+        return None
 
     @property
     def _get_session_params(self):
